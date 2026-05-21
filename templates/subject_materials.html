@@ -73,11 +73,10 @@
                         {{ pdf.title }}
                     </h4>
 
-                    <a href="{{ pdf.pdf_file.url }}"
-                       target="_blank"
+                    <a href="{% url 'view_pdf' pdf.id %}"
                        class="btn btn-primary w-100">
 
-                        Open PDF
+                        View PDF
 
                     </a>
 
