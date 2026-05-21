@@ -80,8 +80,8 @@
 
 <div class="pdf-container">
 
-    <iframe src="{% url 'protected_pdf_file' pdf.id %}#toolbar=0&navpanes=0&scrollbar=0">
-    </iframe>
+    <iframe src="{% url 'protected_pdf_file' pdf.id %}?user={{ request.user.id }}&time={% now 'U' %}#toolbar=0&navpanes=0&scrollbar=0">
+</iframe>
 
 </div>
 

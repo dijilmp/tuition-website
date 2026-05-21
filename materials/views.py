@@ -182,4 +182,11 @@ def protected_pdf_file(request, pdf_id):
 
     response['X-Frame-Options'] = 'SAMEORIGIN'
 
+    # Prevent browser cache so watermark changes for each logged-in student
+    response['Cache-Control'] = (
+        'no-store, no-cache, must-revalidate, max-age=0'
+    )
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+
     return response
