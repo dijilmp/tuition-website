@@ -35,23 +35,27 @@ def create_watermark(width, height, text):
 
     c.setFillAlpha(0.18)
 
-    c.setFont("Helvetica-Bold", 13)
-    c.drawRightString(
-        width - 40,
-        height - 40,
+    # Move watermark to center
+    c.translate(width / 2, height / 2)
+
+    # Straight watermark, no rotation
+    c.setFont("Helvetica-Bold", 18)
+    c.drawCentredString(
+        0,
+        20,
         f"Downloaded by : {text}"
     )
 
-    c.setFont("Helvetica-Bold", 11)
-    c.drawRightString(
-        width - 40,
-        height - 60,
+    c.setFont("Helvetica-Bold", 13)
+    c.drawCentredString(
+        0,
+        -5,
         "Content belongs to Master X's Academy"
     )
 
-    c.drawRightString(
-        width - 40,
-        height - 78,
+    c.drawCentredString(
+        0,
+        -25,
         "Do not share"
     )
 
@@ -61,7 +65,6 @@ def create_watermark(width, height, text):
     packet.seek(0)
 
     return PdfReader(packet).pages[0]
-
 
 @login_required
 def dashboard(request):
