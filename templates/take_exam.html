@@ -1,0 +1,298 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>{{ exam.title }} - Master X's Academy</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+
+    <link href="{% static 'css/mxa_common.css' %}"
+          rel="stylesheet">
+
+</head>
+
+<body>
+
+<div class="study-bg-icons-top">
+    📘 ✏️ 📚 🧮 🔬
+</div>
+
+<div class="study-bg-icons-bottom">
+    🎓 📐 🧪 📝 📖
+</div>
+
+<nav class="navbar navbar-dark bg-primary shadow-sm">
+
+    <div class="container-fluid">
+
+        <div class="d-flex align-items-center">
+
+            <img src="{% static 'images/logo.png' %}"
+                 width="60"
+                 height="60"
+                 class="me-3 rounded-circle">
+
+            <div>
+
+                <span class="navbar-brand mb-0 h4 fw-bold d-block">
+                    {{ exam.title }}
+                </span>
+
+                <small class="text-white">
+                    Master X's Academy
+                </small>
+
+            </div>
+
+        </div>
+
+        <div class="btn btn-warning fw-bold">
+            Time Left:
+            <span id="timer"></span>
+        </div>
+
+    </div>
+
+</nav>
+
+<div class="container mt-5 mb-5">
+
+    <div class="card shadow-sm border-0">
+
+        <div class="card-body">
+
+            <h2 class="fw-bold mb-3">
+                {{ exam.title }}
+            </h2>
+
+            <p>
+                <strong>Subject:</strong>
+                {{ exam.subject.name }}
+            </p>
+
+            <p>
+                <strong>Type:</strong>
+                {{ exam.get_exam_type_display }}
+            </p>
+
+            <p>
+                <strong>Total Marks:</strong>
+                {{ exam.total_marks }}
+            </p>
+
+            <div class="alert alert-info">
+                Your selected MCQ answers and typed answers are saved automatically in this browser.
+            </div>
+
+            <hr>
+
+            <form method="post"
+                  enctype="multipart/form-data"
+                  action="{% url 'submit_exam' exam.id %}"
+                  id="examForm">
+
+                {% csrf_token %}
+
+                {% for question in questions %}
+
+                <div class="mb-4 p-3 border rounded bg-white">
+
+                    <h5 class="fw-bold">
+                        Q{{ forloop.counter }}.
+                        {{ question.question_text }}
+                    </h5>
+
+                    <p class="text-muted">
+                        Marks: {{ question.mark }}
+                    </p>
+
+                    {% if question.question_image %}
+
+                    <div class="text-center mb-3">
+
+                        <img src="{{ question.question_image.url }}"
+                             class="img-fluid rounded border"
+                             style="max-height: 350px;">
+
+                    </div>
+
+                    {% endif %}
+
+                    {% if exam.exam_type == 'mcq' %}
+
+                        {% for choice in question.choices.all %}
+
+                        <div class="form-check mb-2">
+
+                            <input class="form-check-input exam-input"
+                                   type="radio"
+                                   name="question_{{ question.id }}"
+                                   value="{{ choice.id }}"
+                                   id="choice_{{ choice.id }}">
+
+                            <label class="form-check-label"
+                                   for="choice_{{ choice.id }}">
+
+                                {{ choice.choice_text }}
+
+                            </label>
+
+                        </div>
+
+                        {% endfor %}
+
+                    {% elif exam.exam_type == 'one_line' %}
+
+                        <textarea class="form-control exam-input"
+                                  name="question_{{ question.id }}"
+                                  rows="3"
+                                  placeholder="Write your answer here"></textarea>
+
+                    {% elif exam.exam_type == 'photo_upload' %}
+
+                        <input type="file"
+                               name="question_{{ question.id }}"
+                               class="form-control"
+                               accept="image/*">
+
+                        <small class="text-muted">
+                            Upload clear answer photo. Note: selected photo will not remain after refresh.
+                        </small>
+
+                    {% endif %}
+
+                </div>
+
+                {% endfor %}
+
+                <button type="submit"
+                        class="btn btn-success px-5">
+
+                    Submit Exam
+
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+    let totalSeconds = {{ remaining_seconds }};
+
+    function updateTimer() {
+
+        let minutes = Math.floor(totalSeconds / 60);
+        let seconds = totalSeconds % 60;
+
+        document.getElementById("timer").innerHTML =
+            minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+
+        if (totalSeconds <= 0) {
+            clearInterval(timerInterval);
+            alert("Time is over. Your exam will be submitted.");
+            document.getElementById("examForm").submit();
+        }
+
+        totalSeconds--;
+    }
+
+    updateTimer();
+
+    let timerInterval = setInterval(updateTimer, 1000);
+
+
+    const storageKey = "mxa_exam_{{ exam.id }}_user_{{ request.user.id }}";
+
+    function saveAnswers() {
+
+        let answers = {};
+
+        document.querySelectorAll(".exam-input").forEach(function(input) {
+
+            if (input.type === "radio") {
+
+                if (input.checked) {
+                    answers[input.name] = input.value;
+                }
+
+            } else {
+
+                answers[input.name] = input.value;
+
+            }
+
+        });
+
+        localStorage.setItem(
+            storageKey,
+            JSON.stringify(answers)
+        );
+
+    }
+
+    function restoreAnswers() {
+
+        let savedAnswers = localStorage.getItem(storageKey);
+
+        if (!savedAnswers) {
+            return;
+        }
+
+        let answers = JSON.parse(savedAnswers);
+
+        Object.keys(answers).forEach(function(name) {
+
+            let value = answers[name];
+
+            let radioInput = document.querySelector(
+                'input[type="radio"][name="' + name + '"][value="' + value + '"]'
+            );
+
+            if (radioInput) {
+                radioInput.checked = true;
+            }
+
+            let textInput = document.querySelector(
+                'textarea[name="' + name + '"]'
+            );
+
+            if (textInput) {
+                textInput.value = value;
+            }
+
+        });
+
+    }
+
+    document.querySelectorAll(".exam-input").forEach(function(input) {
+
+        input.addEventListener("change", saveAnswers);
+        input.addEventListener("keyup", saveAnswers);
+
+    });
+
+    document.getElementById("examForm").addEventListener("submit", function() {
+
+        localStorage.removeItem(storageKey);
+
+    });
+
+    restoreAnswers();
+
+</script>
+
+</body>
+
+</html>

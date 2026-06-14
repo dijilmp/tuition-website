@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -70,6 +70,12 @@ urlpatterns = [
         'pdf-file/<int:pdf_id>/',
         protected_pdf_file,
         name='protected_pdf_file'
+    ),
+
+    # Online exams
+    path(
+        'exams/',
+        include('exams.urls')
     ),
 
 ]

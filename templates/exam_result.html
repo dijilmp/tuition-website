@@ -1,0 +1,273 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>Exam Result - Master X's Academy</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+
+    <link href="{% static 'css/mxa_common.css' %}"
+          rel="stylesheet">
+
+</head>
+
+<body>
+
+<div class="study-bg-icons-top">
+    📘 ✏️ 📚 🧮 🔬
+</div>
+
+<div class="study-bg-icons-bottom">
+    🎓 📐 🧪 📝 📖
+</div>
+
+<nav class="navbar navbar-dark bg-primary shadow-sm">
+
+    <div class="container-fluid">
+
+        <div class="d-flex align-items-center">
+
+            <img src="{% static 'images/logo.png' %}"
+                 width="60"
+                 height="60"
+                 class="me-3 rounded-circle">
+
+            <div>
+
+                <span class="navbar-brand mb-0 h4 fw-bold d-block">
+                    Exam Result
+                </span>
+
+                <small class="text-white">
+                    Master X's Academy
+                </small>
+
+            </div>
+
+        </div>
+
+        <a href="/exams/"
+           class="btn btn-light fw-bold">
+
+            Back
+
+        </a>
+
+    </div>
+
+</nav>
+
+<div class="container mt-5 mb-5">
+
+    <div class="card shadow-sm border-0">
+
+        <div class="card-body text-center p-5">
+
+            <h2 class="fw-bold mb-3">
+                {{ exam.title }}
+            </h2>
+
+            <p>
+                <strong>Subject:</strong>
+                {{ exam.subject.name }}
+            </p>
+
+            <p>
+                <strong>Exam Type:</strong>
+                {{ exam.get_exam_type_display }}
+            </p>
+
+            {% if result.is_evaluated %}
+
+                {% if exam.exam_type == 'mcq' or exam.result_published %}
+
+                    <h1 class="fw-bold text-success mt-4">
+                        Score: {{ result.score|floatformat:"-2" }} out of {{ exam.total_marks }}
+                    </h1>
+
+                    {% if rank %}
+
+                    <h3 class="fw-bold text-primary mt-3">
+                        Rank: {{ rank }}
+                    </h3>
+
+                    {% endif %}
+
+                    <h5 class="fw-bold text-secondary mt-3">
+                        Students Attempted: {{ attempted_count }}
+                    </h5>
+
+                    <p class="text-muted mt-3">
+                        Submitted on {{ result.submitted_at }}
+                    </p>
+
+                {% else %}
+
+                    <div class="alert alert-warning mt-4">
+                        Your answer is evaluated, but result is not published yet.
+                    </div>
+
+                {% endif %}
+
+            {% else %}
+
+                <div class="alert alert-info mt-4">
+                    Your exam is submitted successfully. Waiting for valuation.
+                </div>
+
+            {% endif %}
+
+            {% if result.manual_feedback %}
+
+            <div class="alert alert-secondary mt-4">
+                <strong>Feedback:</strong>
+                {{ result.manual_feedback }}
+            </div>
+
+            {% endif %}
+
+            <div class="mt-4">
+
+                {% if exam.exam_type == 'mcq' and exam.show_answer_review and result.is_submitted %}
+
+                <button class="btn btn-primary px-5 fw-bold me-2"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#answerReview">
+
+                    View Answers
+
+                </button>
+
+                {% endif %}
+
+                {% if exam.exam_type != 'mcq' and exam.show_answer_pdf and exam.answer_pdf and result.is_submitted %}
+
+                <a href="{{ exam.answer_pdf.url }}"
+                   target="_blank"
+                   class="btn btn-primary px-5 fw-bold me-2">
+
+                    View Answer PDF
+
+                </a>
+
+                {% endif %}
+
+                {% if exam.allow_reattempt %}
+
+                <form method="post"
+                      action="{% url 'reattempt_exam' result.id %}"
+                      class="d-inline"
+                      onsubmit="return confirm('Are you sure you want to re-attempt this exam? Your old result will be deleted.');">
+
+                    {% csrf_token %}
+
+                    <button type="submit"
+                            class="btn btn-warning px-5 fw-bold">
+
+                        Re-attempt Exam
+
+                    </button>
+
+                </form>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% if exam.exam_type == 'mcq' and exam.show_answer_review and result.is_submitted %}
+
+    <div class="collapse mt-5"
+         id="answerReview">
+
+        <div class="card shadow-sm border-0">
+
+            <div class="card-body">
+
+                <h2 class="fw-bold mb-4 text-center">
+                    Answer Review
+                </h2>
+
+                {% for answer in answers %}
+
+                <div class="mb-4 p-3 border rounded bg-white">
+
+                    <h5 class="fw-bold">
+                        Q{{ forloop.counter }}.
+                        {{ answer.question.question_text }}
+                    </h5>
+
+                    {% if answer.selected_choice %}
+
+                    <p>
+                        <strong>Your Answer:</strong>
+                        {{ answer.selected_choice.choice_text }}
+                    </p>
+
+                    {% else %}
+
+                    <p class="text-muted">
+                        <strong>Your Answer:</strong>
+                        Not answered
+                    </p>
+
+                    {% endif %}
+
+                    {% for choice in answer.question.choices.all %}
+
+                        {% if choice.is_correct %}
+
+                        <p class="text-success">
+                            <strong>Correct Answer:</strong>
+                            {{ choice.choice_text }}
+                        </p>
+
+                        {% endif %}
+
+                    {% endfor %}
+
+                    {% if answer.marks_awarded > 0 %}
+
+                    <div class="alert alert-success py-2 mb-0">
+                        Correct
+                    </div>
+
+                    {% else %}
+
+                    <div class="alert alert-danger py-2 mb-0">
+                        Wrong
+                    </div>
+
+                    {% endif %}
+
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
+</script>
+
+</body>
+
+</html>
