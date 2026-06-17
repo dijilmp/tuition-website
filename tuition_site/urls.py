@@ -12,12 +12,16 @@ from materials.views import (
     protected_pdf_file
 )
 
+from accounts.views import (
+    register_training,
+    register_form,
+    register_success,
+)
+
 urlpatterns = [
 
-    # Admin
     path('admin/', admin.site.urls),
 
-    # Login page
     path(
         '',
         auth_views.LoginView.as_view(
@@ -26,7 +30,6 @@ urlpatterns = [
         name='login'
     ),
 
-    # Optional login URL
     path(
         'login/',
         auth_views.LoginView.as_view(
@@ -35,7 +38,24 @@ urlpatterns = [
         name='login_page'
     ),
 
-    # Logout
+    path(
+        'register/',
+        register_training,
+        name='register_training'
+    ),
+
+    path(
+        'register/<str:training_type>/',
+        register_form,
+        name='register_form'
+    ),
+
+    path(
+        'register-success/',
+        register_success,
+        name='register_success'
+    ),
+
     path(
         'logout/',
         auth_views.LogoutView.as_view(
@@ -44,35 +64,30 @@ urlpatterns = [
         name='logout'
     ),
 
-    # Dashboard
     path(
         'dashboard/',
         dashboard,
         name='dashboard'
     ),
 
-    # Subject materials
     path(
         'subject/<int:subject_id>/',
         subject_materials,
         name='subject_materials'
     ),
 
-    # PDF preview page
     path(
         'pdf/<int:pdf_id>/',
         view_pdf,
         name='view_pdf'
     ),
 
-    # Protected PDF file
     path(
         'pdf-file/<int:pdf_id>/',
         protected_pdf_file,
         name='protected_pdf_file'
     ),
 
-    # Online exams
     path(
         'exams/',
         include('exams.urls')
@@ -80,7 +95,6 @@ urlpatterns = [
 
 ]
 
-# Media files
 if settings.DEBUG:
     urlpatterns += static(
         settings.MEDIA_URL,

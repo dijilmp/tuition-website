@@ -1,6 +1,9 @@
 from io import BytesIO
 
-from django.shortcuts import render, get_object_or_404
+import requests
+import cloudinary.api
+
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import FileResponse
 
@@ -27,6 +30,19 @@ def get_client_ip(request):
     return ip
 
 
+def get_student_subjects(student_profile):
+    selected_subjects = student_profile.subjects.filter(
+        class_level=student_profile.class_level
+    )
+
+    if selected_subjects.exists():
+        return selected_subjects
+
+    return Subject.objects.filter(
+        class_level=student_profile.class_level
+    )
+
+
 def create_watermark(width, height, text):
     packet = BytesIO()
 
@@ -35,10 +51,8 @@ def create_watermark(width, height, text):
 
     c.setFillAlpha(0.18)
 
-    # Move watermark to center
     c.translate(width / 2, height / 2)
 
-    # Straight watermark, no rotation
     c.setFont("Helvetica-Bold", 18)
     c.drawCentredString(
         0,
@@ -66,14 +80,37 @@ def create_watermark(width, height, text):
 
     return PdfReader(packet).pages[0]
 
+
+def get_pdf_bytes(pdf):
+    try:
+        return pdf.pdf_file.open('rb')
+    except Exception:
+        public_id = pdf.pdf_file.name
+
+        if public_id.lower().endswith('.pdf'):
+            public_id = public_id[:-4]
+
+        resource = cloudinary.api.resource(
+            public_id,
+            resource_type="raw"
+        )
+
+        pdf_url = resource.get("secure_url")
+
+        response = requests.get(pdf_url)
+        response.raise_for_status()
+
+        return BytesIO(response.content)
+
+
 @login_required
 def dashboard(request):
     student_profile = StudentProfile.objects.get(
         user=request.user
     )
 
-    subjects = Subject.objects.filter(
-        class_level=student_profile.class_level
+    subjects = get_student_subjects(
+        student_profile
     )
 
     return render(request, 'dashboard.html', {
@@ -87,8 +124,12 @@ def subject_materials(request, subject_id):
         user=request.user
     )
 
+    allowed_subjects = get_student_subjects(
+        student_profile
+    )
+
     subject = get_object_or_404(
-        Subject,
+        allowed_subjects,
         id=subject_id,
         class_level=student_profile.class_level
     )
@@ -116,10 +157,15 @@ def view_pdf(request, pdf_id):
         user=request.user
     )
 
+    allowed_subjects = get_student_subjects(
+        student_profile
+    )
+
     pdf = get_object_or_404(
         PDFMaterial,
         id=pdf_id,
-        class_level=student_profile.class_level
+        class_level=student_profile.class_level,
+        subject__in=allowed_subjects
     )
 
     PDFAccessLog.objects.create(
@@ -139,10 +185,15 @@ def protected_pdf_file(request, pdf_id):
         user=request.user
     )
 
+    allowed_subjects = get_student_subjects(
+        student_profile
+    )
+
     pdf = get_object_or_404(
         PDFMaterial,
         id=pdf_id,
-        class_level=student_profile.class_level
+        class_level=student_profile.class_level,
+        subject__in=allowed_subjects
     )
 
     user = request.user
@@ -152,7 +203,7 @@ def protected_pdf_file(request, pdf_id):
     if not student_name:
         student_name = user.username
 
-    original_pdf = pdf.pdf_file.open('rb')
+    original_pdf = get_pdf_bytes(pdf)
 
     reader = PdfReader(original_pdf)
     writer = PdfWriter()
@@ -184,8 +235,6 @@ def protected_pdf_file(request, pdf_id):
     )
 
     response['X-Frame-Options'] = 'SAMEORIGIN'
-
-    # Prevent browser cache so watermark changes for each logged-in student
     response['Cache-Control'] = (
         'no-store, no-cache, must-revalidate, max-age=0'
     )
