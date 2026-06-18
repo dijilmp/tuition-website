@@ -1,0 +1,394 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>{{ demo_option.title }} - Demo</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+
+    <style>
+
+        body {
+            background: #f4f7fb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #0d6efd, #6610f2);
+            color: white;
+            padding: 26px 16px;
+            text-align: center;
+        }
+
+        .content-card {
+            border: 0;
+            border-radius: 20px;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.10);
+        }
+
+        .badge-demo {
+            background: #d1e7dd;
+            color: #0f5132;
+            border-radius: 30px;
+            padding: 6px 12px;
+            font-weight: 800;
+        }
+
+        .badge-online {
+            background: #cfe2ff;
+            color: #084298;
+            border-radius: 30px;
+            padding: 6px 12px;
+            font-weight: 800;
+        }
+
+        .btn-rounded {
+            border-radius: 14px;
+            font-weight: 800;
+        }
+
+        .mxa-info-box {
+            background: linear-gradient(135deg, #e7f1ff, #fff3cd);
+            border: 1px solid #b6d4fe;
+            border-radius: 18px;
+            padding: 15px 18px;
+            font-size: 1rem;
+            line-height: 1.7;
+            color: #1f2937;
+            margin-bottom: 22px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+        }
+
+        .mxa-info-box strong {
+            color: #0d6efd;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="hero">
+
+    <h2 class="fw-bold mb-1">
+        {{ demo_option.title }}
+    </h2>
+
+    <p class="mb-1">
+        {{ demo_option }}
+    </p>
+
+    <p class="mb-0">
+        Master X's Academy - Your Learning Partner
+    </p>
+
+</div>
+
+<div class="container py-4">
+
+    <div class="mxa-info-box">
+        <strong>Master X's Academy</strong> gives online live tuition and training with mock tests and study materials.
+        You can see a few demo study materials and mock tests here.
+        If you need online live classes, please register with us.
+        We will contact you with further details.
+
+        <hr class="my-2">
+
+        <strong>മാസ്റ്റർ എക്സ് അക്കാദമി</strong> ഓൺലൈൻ ലൈവ് ട്യൂഷനും പരിശീലനവും, മോക്ക് ടെസ്റ്റുകളും സ്റ്റഡി മെറ്റീരിയലുകളും നൽകുന്നു.
+        ഇവിടെ ഞങ്ങളുടെ ചില ഡെമോ സ്റ്റഡി മെറ്റീരിയലുകളും മോക്ക് ടെസ്റ്റുകളും നിങ്ങൾക്ക് കാണാം.
+        ഓൺലൈൻ ലൈവ് ക്ലാസുകൾ ആവശ്യമെങ്കിൽ ദയവായി രജിസ്റ്റർ ചെയ്യുക.
+        കൂടുതൽ വിവരങ്ങൾക്കായി ഞങ്ങൾ നിങ്ങളെ ബന്ധപ്പെടുന്നതാണ്.
+    </div>
+
+    {% if notice %}
+
+    <div class="card content-card mb-3">
+
+        <div class="card-body">
+
+            <h4 class="fw-bold text-primary">
+                {{ notice.heading }}
+            </h4>
+
+            <div class="row g-2 mb-2">
+
+                {% if notice.exam_date %}
+                <div class="col-md-6">
+                    <strong>Exam Date:</strong> {{ notice.exam_date }}
+                </div>
+                {% endif %}
+
+                {% if notice.scholarship_amount %}
+                <div class="col-md-6">
+                    <strong>Scholarship:</strong> {{ notice.scholarship_amount }}
+                </div>
+                {% endif %}
+
+                {% if notice.registration_start_date %}
+                <div class="col-md-6">
+                    <strong>Registration Starts:</strong> {{ notice.registration_start_date }}
+                </div>
+                {% endif %}
+
+                {% if notice.registration_end_date %}
+                <div class="col-md-6">
+                    <strong>Registration Ends:</strong> {{ notice.registration_end_date }}
+                </div>
+                {% endif %}
+
+            </div>
+
+            {% if notice.message %}
+            <p class="mb-0">
+                {{ notice.message|linebreaksbr }}
+            </p>
+            {% endif %}
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+    <h4 class="fw-bold mt-4 mb-3">
+        Online Demo Tests
+    </h4>
+
+    <div class="row g-3">
+
+        {% for test in online_tests %}
+
+        <div class="col-md-6">
+
+            <div class="card content-card h-100">
+
+                <div class="card-body">
+
+                    <span class="badge-online">
+                        Online MCQ Test
+                    </span>
+
+                    <h5 class="fw-bold mt-3">
+                        {{ test.title }}
+                    </h5>
+
+                    {% if test.chapter_name %}
+                    <p class="text-primary fw-bold mb-2">
+                        {{ test.chapter_name }}
+                    </p>
+                    {% endif %}
+
+                    {% if test.description %}
+                    <p class="text-muted">
+                        {{ test.description }}
+                    </p>
+                    {% endif %}
+
+                    <p class="mb-2">
+                        Duration: <strong>{{ test.duration_minutes }} minutes</strong>
+                    </p>
+
+                    <p class="mb-3">
+                        Total Marks: <strong>{{ test.total_marks }}</strong>
+                    </p>
+
+                    <a href="{% url 'take_demo_online_test' test.id %}"
+                       class="btn btn-primary btn-rounded">
+                        Start Online Test
+                    </a>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        {% empty %}
+
+        <div class="col-12">
+
+            <div class="alert alert-info">
+                Online demo test will be added soon.
+            </div>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+    <h4 class="fw-bold mt-4 mb-3">
+        Study Materials
+    </h4>
+
+    <div class="row g-3">
+
+        {% for material in materials %}
+
+        <div class="col-md-6">
+
+            <div class="card content-card h-100">
+
+                <div class="card-body">
+
+                    <span class="badge-demo">
+                        Demo Material
+                    </span>
+
+                    <h5 class="fw-bold mt-3">
+                        {{ material.title }}
+                    </h5>
+
+                    {% if material.chapter_name %}
+                    <p class="text-primary fw-bold mb-2">
+                        {{ material.chapter_name }}
+                    </p>
+                    {% endif %}
+
+                    {% if material.description %}
+                    <p class="text-muted">
+                        {{ material.description }}
+                    </p>
+                    {% endif %}
+
+                    {% if material.pdf_file %}
+                    <a href="{{ material.pdf_file.url }}"
+                       target="_blank"
+                       class="btn btn-outline-primary btn-rounded">
+                        Open PDF
+                    </a>
+                    {% endif %}
+
+                    {% if material.external_link %}
+                    <a href="{{ material.external_link }}"
+                       target="_blank"
+                       class="btn btn-outline-success btn-rounded">
+                        Open Link
+                    </a>
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+        </div>
+
+        {% empty %}
+
+        <div class="col-12">
+
+            <div class="alert alert-info">
+                Demo study material will be added soon.
+            </div>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+    <h4 class="fw-bold mt-4 mb-3">
+        PDF Mock Tests
+    </h4>
+
+    <div class="row g-3">
+
+        {% for test in mock_tests %}
+
+        <div class="col-md-6">
+
+            <div class="card content-card h-100">
+
+                <div class="card-body">
+
+                    <span class="badge-demo">
+                        Demo Test {{ test.mock_number }}
+                    </span>
+
+                    <h5 class="fw-bold mt-3">
+                        {{ test.title }}
+                    </h5>
+
+                    {% if test.chapter_name %}
+                    <p class="text-primary fw-bold mb-2">
+                        {{ test.chapter_name }}
+                    </p>
+                    {% endif %}
+
+                    {% if test.description %}
+                    <p class="text-muted">
+                        {{ test.description }}
+                    </p>
+                    {% endif %}
+
+                    {% if test.external_test_link %}
+                    <a href="{{ test.external_test_link }}"
+                       target="_blank"
+                       class="btn btn-primary btn-rounded">
+                        Start External Test
+                    </a>
+                    {% endif %}
+
+                    {% if test.question_pdf %}
+                    <a href="{{ test.question_pdf.url }}"
+                       target="_blank"
+                       class="btn btn-outline-primary btn-rounded">
+                        Question PDF
+                    </a>
+                    {% endif %}
+
+                    {% if test.answer_key_pdf %}
+                    <a href="{{ test.answer_key_pdf.url }}"
+                       target="_blank"
+                       class="btn btn-outline-dark btn-rounded">
+                        Answer Key
+                    </a>
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+        </div>
+
+        {% empty %}
+
+        <div class="col-12">
+
+            <div class="alert alert-info">
+                PDF mock tests will be added soon.
+            </div>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+    <div class="text-center mt-4">
+
+        <a href="{% url 'view_demo' %}"
+           class="btn btn-outline-primary fw-bold">
+            View Another Demo
+        </a>
+
+        <a href="{% url 'register_training' %}"
+           class="btn btn-warning fw-bold">
+            Register for Classes
+        </a>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>

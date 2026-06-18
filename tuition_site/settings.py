@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'accounts',
     'materials',
     'exams',
+    'demo',
 ]
 
 MIDDLEWARE = [

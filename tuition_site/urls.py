@@ -18,9 +18,13 @@ from accounts.views import (
     register_success,
 )
 
+
 urlpatterns = [
 
     path('admin/', admin.site.urls),
+
+    # Separate demo system. This does not affect existing student login/dashboard/exams.
+    path('', include('demo.urls')),
 
     path(
         '',
