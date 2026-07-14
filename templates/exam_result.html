@@ -150,15 +150,17 @@
 
                 {% endif %}
 
-                {% if exam.exam_type != 'mcq' and exam.show_answer_pdf and exam.answer_pdf and result.is_submitted %}
+                {% if exam.show_answer_pdf and exam.answer_pdf and result.is_submitted and exam.result_published %}
 
-                <a href="{{ exam.answer_pdf.url }}"
-                   target="_blank"
-                   class="btn btn-primary px-5 fw-bold me-2">
+                <button class="btn btn-success px-5 fw-bold me-2 mt-2"
+                        type="button"
+                        id="viewAnswerPdfBtn"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#answerPdfBox">
 
                     View Answer PDF
 
-                </a>
+                </button>
 
                 {% endif %}
 
@@ -172,7 +174,7 @@
                     {% csrf_token %}
 
                     <button type="submit"
-                            class="btn btn-warning px-5 fw-bold">
+                            class="btn btn-warning px-5 fw-bold mt-2">
 
                         Re-attempt Exam
 
@@ -187,6 +189,41 @@
         </div>
 
     </div>
+
+    {% if exam.show_answer_pdf and exam.answer_pdf and result.is_submitted and exam.result_published %}
+
+    <div class="collapse mt-5"
+         id="answerPdfBox">
+
+        <div class="card shadow-sm border-0">
+
+            <div class="card-body">
+
+                <h2 class="fw-bold mb-4 text-center">
+                    Answer PDF
+                </h2>
+
+                <div class="ratio ratio-4x3"
+                     style="min-height: 75vh;">
+
+                    <iframe src="{{ exam.answer_pdf.url }}#toolbar=0&navpanes=0&scrollbar=1"
+                            style="width:100%; min-height:75vh; border:1px solid #ddd; border-radius:12px;"
+                            title="Answer PDF">
+                    </iframe>
+
+                </div>
+
+                <p class="text-muted small mt-2 text-center">
+                    Answer PDF is shown inside this page.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endif %}
 
     {% if exam.exam_type == 'mcq' and exam.show_answer_review and result.is_submitted %}
 
@@ -296,32 +333,38 @@
 
         const answerReview = document.getElementById("answerReview");
         const viewAnswersBtn = document.getElementById("viewAnswersBtn");
+        const answerPdfBox = document.getElementById("answerPdfBox");
+        const viewAnswerPdfBtn = document.getElementById("viewAnswerPdfBtn");
         const topResultCard = document.getElementById("topResultCard");
 
-        if (answerReview && viewAnswersBtn) {
+        function setupToggle(box, button, openText, closeText) {
 
-            answerReview.addEventListener("show.bs.collapse", function () {
-                viewAnswersBtn.innerText = "Opening Answers...";
+            if (!box || !button) {
+                return;
+            }
+
+            box.addEventListener("show.bs.collapse", function () {
+                button.innerText = "Opening...";
             });
 
-            answerReview.addEventListener("shown.bs.collapse", function () {
+            box.addEventListener("shown.bs.collapse", function () {
 
-                viewAnswersBtn.innerText = "Hide Answers";
+                button.innerText = closeText;
 
-                answerReview.scrollIntoView({
+                box.scrollIntoView({
                     behavior: "smooth",
                     block: "start"
                 });
 
             });
 
-            answerReview.addEventListener("hide.bs.collapse", function () {
-                viewAnswersBtn.innerText = "Closing...";
+            box.addEventListener("hide.bs.collapse", function () {
+                button.innerText = "Closing...";
             });
 
-            answerReview.addEventListener("hidden.bs.collapse", function () {
+            box.addEventListener("hidden.bs.collapse", function () {
 
-                viewAnswersBtn.innerText = "View Answers";
+                button.innerText = openText;
 
                 if (topResultCard) {
                     topResultCard.scrollIntoView({
@@ -333,6 +376,9 @@
             });
 
         }
+
+        setupToggle(answerReview, viewAnswersBtn, "View Answers", "Hide Answers");
+        setupToggle(answerPdfBox, viewAnswerPdfBtn, "View Answer PDF", "Hide Answer PDF");
 
     });
 

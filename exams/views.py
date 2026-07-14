@@ -1,9 +1,14 @@
 from datetime import timedelta
+from io import BytesIO
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.core.files.base import ContentFile
+from django.contrib import messages
+
+from PIL import Image, ImageOps
 
 from accounts.models import StudentProfile
 from .models import (
@@ -11,7 +16,8 @@ from .models import (
     Question,
     Choice,
     ExamResult,
-    StudentAnswer
+    StudentAnswer,
+    BulkAnswerImage
 )
 
 
@@ -54,6 +60,63 @@ def get_remaining_seconds(result):
         remaining_seconds = 0
 
     return remaining_seconds
+
+
+
+def create_submitted_answer_pdf(result, uploaded_images):
+    """
+    Converts uploaded answer images into a single PDF in the same order
+    selected/uploaded by the student. Only the generated PDF is used for admin valuation.
+    """
+    pdf_images = []
+
+    for uploaded_image in uploaded_images:
+        try:
+            uploaded_image.seek(0)
+            image = Image.open(uploaded_image)
+            image = ImageOps.exif_transpose(image)
+
+            if image.mode in ("RGBA", "LA", "P"):
+                background = Image.new("RGB", image.size, "white")
+                if image.mode == "P":
+                    image = image.convert("RGBA")
+                background.paste(image, mask=image.split()[-1] if image.mode in ("RGBA", "LA") else None)
+                image = background
+            else:
+                image = image.convert("RGB")
+
+            pdf_images.append(image)
+        except Exception:
+            continue
+
+    if not pdf_images:
+        return False
+
+    pdf_buffer = BytesIO()
+    first_image = pdf_images[0]
+    remaining_images = pdf_images[1:]
+
+    first_image.save(
+        pdf_buffer,
+        format="PDF",
+        save_all=True,
+        append_images=remaining_images,
+        resolution=100.0
+    )
+
+    pdf_buffer.seek(0)
+
+    safe_student = result.student.username.replace(" ", "_")
+    safe_exam = result.exam.title.replace(" ", "_")[:60]
+    filename = f"{safe_student}_{safe_exam}_answer_sheet.pdf"
+
+    result.submitted_answer_pdf.save(
+        filename,
+        ContentFile(pdf_buffer.read()),
+        save=False
+    )
+
+    return True
 
 
 def mark_exam_submitted(result):
@@ -195,6 +258,56 @@ def submit_exam(request, exam_id):
 
     total_score = 0
 
+    if exam.exam_type == 'question_paper_upload':
+
+        answer_images = request.FILES.getlist('answer_images')
+        camera_images = request.FILES.getlist('camera_images')
+
+        all_images = list(answer_images) + list(camera_images)
+
+        if not all_images:
+            messages.error(
+                request,
+                'Please upload at least one answer image before submitting.'
+            )
+
+            return redirect(
+                'take_exam',
+                exam_id=exam.id
+            )
+
+        # Remove old generated PDF if this result is being reused locally.
+        if result.submitted_answer_pdf:
+            result.submitted_answer_pdf.delete(save=False)
+            result.submitted_answer_pdf = None
+
+        pdf_created = create_submitted_answer_pdf(
+            result,
+            all_images
+        )
+
+        if not pdf_created:
+            messages.error(
+                request,
+                'Unable to create answer PDF. Please upload clear JPG or PNG images.'
+            )
+
+            return redirect(
+                'take_exam',
+                exam_id=exam.id
+            )
+
+        result.is_submitted = True
+        result.submitted_at = timezone.now()
+        result.is_evaluated = False
+        result.score = 0
+        result.save()
+
+        return redirect(
+            'exam_result',
+            result_id=result.id
+        )
+
     questions = Question.objects.filter(
         exam=exam
     )
@@ -283,7 +396,16 @@ def exam_result(request, result_id):
 
     rank = None
 
-    if result.is_evaluated:
+    if result.is_evaluated and exam.result_published:
+        higher_score_count = ExamResult.objects.filter(
+            exam=exam,
+            is_evaluated=True,
+            score__gt=result.score
+        ).count()
+
+        rank = higher_score_count + 1
+
+    if result.is_evaluated and exam.exam_type == 'mcq':
         higher_score_count = ExamResult.objects.filter(
             exam=exam,
             is_evaluated=True,
@@ -309,7 +431,7 @@ def exam_result(request, result_id):
         'exam': exam,
         'rank': rank,
         'attempted_count': attempted_count,
-        'answers': answers
+        'answers': answers,
     })
 
 

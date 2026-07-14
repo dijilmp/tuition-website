@@ -81,6 +81,7 @@ class ExamAdmin(admin.ModelAdmin):
         'exam_type',
         'duration_minutes',
         'total_marks',
+        'question_paper_available',
         'attempted_count',
         'evaluated_count',
         'is_published',
@@ -110,6 +111,39 @@ class ExamAdmin(admin.ModelAdmin):
 
     filter_horizontal = (
         'allowed_students',
+    )
+
+    fieldsets = (
+        ('Exam Details', {
+            'fields': (
+                'title',
+                'class_level',
+                'subject',
+                'exam_type',
+                'duration_minutes',
+                'total_marks',
+                'question_paper_file',
+            )
+        }),
+        ('Student Access', {
+            'fields': (
+                'allowed_students',
+            )
+        }),
+        ('Publish Settings', {
+            'fields': (
+                'is_published',
+                'result_published',
+                'allow_reattempt',
+                'show_answer_review',
+            )
+        }),
+        ('Answer PDF / Solution', {
+            'fields': (
+                'answer_pdf',
+                'show_answer_pdf',
+            )
+        }),
     )
 
     def get_urls(self):
@@ -149,6 +183,14 @@ class ExamAdmin(admin.ModelAdmin):
 
     answer_pdf_available.short_description = "Answer PDF"
 
+    def question_paper_available(self, obj):
+        if obj.question_paper_file:
+            return "Yes"
+
+        return "No"
+
+    question_paper_available.short_description = "Question Paper"
+
     def view_results_link(self, obj):
         url = (
             reverse('admin:exams_examresult_changelist')
@@ -181,7 +223,8 @@ class ExamAdmin(admin.ModelAdmin):
 
         results = ExamResult.objects.filter(
             exam=exam,
-            is_submitted=True
+            is_submitted=True,
+            is_evaluated=True
         ).order_by(
             '-score',
             'submitted_at'
@@ -353,6 +396,7 @@ class ExamResultAdmin(admin.ModelAdmin):
         'score',
         'is_submitted',
         'is_evaluated',
+        'submitted_answer_pdf_available',
         'started_at',
         'submitted_at',
     )
@@ -371,12 +415,49 @@ class ExamResultAdmin(admin.ModelAdmin):
         'exam__title',
     )
 
+    fields = (
+        'student',
+        'exam',
+        'started_at',
+        'submitted_at',
+        'is_submitted',
+        'submitted_answer_pdf_link',
+        'score',
+        'is_evaluated',
+        'manual_feedback',
+    )
+
+    readonly_fields = (
+        'submitted_answer_pdf_link',
+    )
+
     inlines = [
-        StudentAnswerInline
+        StudentAnswerInline,
     ]
 
+    def submitted_answer_pdf_available(self, obj):
+        if obj.submitted_answer_pdf:
+            return "Yes"
+
+        return "No"
+
+    submitted_answer_pdf_available.short_description = "Answer PDF"
+
+    def submitted_answer_pdf_link(self, obj):
+        if obj.submitted_answer_pdf:
+            return format_html(
+                '<iframe src="{}#toolbar=0&navpanes=0&scrollbar=1" style="width:100%; min-height:700px; border:1px solid #ddd; border-radius:8px;"></iframe><br><a href="{}" target="_blank">Open answer PDF in new tab</a>',
+                obj.submitted_answer_pdf.url,
+                obj.submitted_answer_pdf.url
+            )
+
+        return "Answer PDF not generated yet."
+
+    submitted_answer_pdf_link.short_description = "Student Answer PDF"
+
     actions = [
-        'recalculate_score'
+        'recalculate_score',
+        'mark_as_evaluated',
     ]
 
     def recalculate_score(self, request, queryset):
@@ -396,6 +477,18 @@ class ExamResultAdmin(admin.ModelAdmin):
         )
 
     recalculate_score.short_description = "Recalculate score after valuation"
+
+    def mark_as_evaluated(self, request, queryset):
+        updated_count = queryset.update(
+            is_evaluated=True
+        )
+
+        self.message_user(
+            request,
+            f"{updated_count} result(s) marked as evaluated."
+        )
+
+    mark_as_evaluated.short_description = "Mark selected results as evaluated"
 
 
 class StudentAnswerAdmin(admin.ModelAdmin):

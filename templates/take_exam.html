@@ -64,6 +64,18 @@
 
 <div class="container mt-5 mb-5">
 
+    {% if messages %}
+
+        {% for message in messages %}
+
+        <div class="alert alert-{{ message.tags }}">
+            {{ message }}
+        </div>
+
+        {% endfor %}
+
+    {% endif %}
+
     <div class="card shadow-sm border-0">
 
         <div class="card-body">
@@ -87,9 +99,19 @@
                 {{ exam.total_marks }}
             </p>
 
+            {% if exam.exam_type == 'question_paper_upload' %}
+
+            <div class="alert alert-info">
+                Question paper is shown inside this page. Write your answers on paper, then upload all answer images together before submitting. The system will automatically convert your uploaded images into one answer PDF in the same order.
+            </div>
+
+            {% else %}
+
             <div class="alert alert-info">
                 Your selected MCQ answers and typed answers are saved automatically in this browser.
             </div>
+
+            {% endif %}
 
             <hr>
 
@@ -100,77 +122,168 @@
 
                 {% csrf_token %}
 
-                {% for question in questions %}
+                {% if exam.exam_type == 'question_paper_upload' %}
 
-                <div class="mb-4 p-3 border rounded bg-white">
+                    <div class="mb-4 p-3 border rounded bg-white">
 
-                    <h5 class="fw-bold">
-                        Q{{ forloop.counter }}.
-                        {{ question.question_text }}
-                    </h5>
+                        <h4 class="fw-bold mb-3">
+                            Question Paper
+                        </h4>
 
-                    <p class="text-muted">
-                        Marks: {{ question.mark }}
-                    </p>
+                        {% if exam.question_paper_file %}
 
-                    {% if question.question_image %}
+                            {% if exam.question_paper_is_pdf %}
 
-                    <div class="text-center mb-3">
+                            <div class="ratio ratio-4x3"
+                                 style="min-height: 75vh;">
 
-                        <img src="{{ question.question_image.url }}"
-                             class="img-fluid rounded border"
-                             style="max-height: 350px;">
+                                <iframe src="{{ exam.question_paper_file.url }}#toolbar=0&navpanes=0&scrollbar=1"
+                                        style="width:100%; min-height:75vh; border:1px solid #ddd; border-radius:12px;"
+                                        title="Question Paper">
+                                </iframe>
+
+                            </div>
+
+                            {% elif exam.question_paper_is_image %}
+
+                            <div class="text-center">
+
+                                <img src="{{ exam.question_paper_file.url }}"
+                                     class="img-fluid rounded border"
+                                     style="max-height: 85vh;">
+
+                            </div>
+
+                            {% else %}
+
+                            <div class="alert alert-warning">
+                                Question paper file is uploaded, but preview is available only for PDF or image files.
+                            </div>
+
+                            {% endif %}
+
+                        {% else %}
+
+                            <div class="alert alert-warning">
+                                Question paper is not uploaded yet. Please contact Master X's Academy.
+                            </div>
+
+                        {% endif %}
 
                     </div>
 
-                    {% endif %}
+                    <div class="mb-4 p-3 border rounded bg-white">
 
-                    {% if exam.exam_type == 'mcq' %}
+                        <h4 class="fw-bold mb-3">
+                            Upload Answer Images
+                        </h4>
 
-                        {% for choice in question.choices.all %}
+                        <p class="text-muted">
+                            Upload clear photos of all answer pages in the correct order. After submit, these images will be converted into one PDF for valuation.
+                        </p>
 
-                        <div class="form-check mb-2">
+                        <label class="form-label fw-bold">
+                            Select answer images from phone/gallery/files
+                        </label>
 
-                            <input class="form-check-input exam-input"
-                                   type="radio"
-                                   name="question_{{ question.id }}"
-                                   value="{{ choice.id }}"
-                                   id="choice_{{ choice.id }}">
+                        <input type="file"
+                               name="answer_images"
+                               class="form-control mb-3"
+                               accept="image/*"
+                               multiple
+                               required>
 
-                            <label class="form-check-label"
-                                   for="choice_{{ choice.id }}">
+                        <label class="form-label fw-bold">
+                            Take photo using camera
+                        </label>
 
-                                {{ choice.choice_text }}
+                        <input type="file"
+                               name="camera_images"
+                               class="form-control"
+                               accept="image/*"
+                               capture="environment">
 
-                            </label>
+                        <small class="text-muted d-block mt-2">
+                            On mobile, this option can open the camera. If you have many pages, you can use the first upload option and select multiple images.
+                        </small>
+
+                    </div>
+
+                {% else %}
+
+                    {% for question in questions %}
+
+                    <div class="mb-4 p-3 border rounded bg-white">
+
+                        <h5 class="fw-bold">
+                            Q{{ forloop.counter }}.
+                            {{ question.question_text }}
+                        </h5>
+
+                        <p class="text-muted">
+                            Marks: {{ question.mark }}
+                        </p>
+
+                        {% if question.question_image %}
+
+                        <div class="text-center mb-3">
+
+                            <img src="{{ question.question_image.url }}"
+                                 class="img-fluid rounded border"
+                                 style="max-height: 350px;">
 
                         </div>
 
-                        {% endfor %}
+                        {% endif %}
 
-                    {% elif exam.exam_type == 'one_line' %}
+                        {% if exam.exam_type == 'mcq' %}
 
-                        <textarea class="form-control exam-input"
-                                  name="question_{{ question.id }}"
-                                  rows="3"
-                                  placeholder="Write your answer here"></textarea>
+                            {% for choice in question.choices.all %}
 
-                    {% elif exam.exam_type == 'photo_upload' %}
+                            <div class="form-check mb-2">
 
-                        <input type="file"
-                               name="question_{{ question.id }}"
-                               class="form-control"
-                               accept="image/*">
+                                <input class="form-check-input exam-input"
+                                       type="radio"
+                                       name="question_{{ question.id }}"
+                                       value="{{ choice.id }}"
+                                       id="choice_{{ choice.id }}">
 
-                        <small class="text-muted">
-                            Upload clear answer photo. Note: selected photo will not remain after refresh.
-                        </small>
+                                <label class="form-check-label"
+                                       for="choice_{{ choice.id }}">
 
-                    {% endif %}
+                                    {{ choice.choice_text }}
 
-                </div>
+                                </label>
 
-                {% endfor %}
+                            </div>
+
+                            {% endfor %}
+
+                        {% elif exam.exam_type == 'one_line' %}
+
+                            <textarea class="form-control exam-input"
+                                      name="question_{{ question.id }}"
+                                      rows="3"
+                                      placeholder="Write your answer here"></textarea>
+
+                        {% elif exam.exam_type == 'photo_upload' %}
+
+                            <input type="file"
+                                   name="question_{{ question.id }}"
+                                   class="form-control"
+                                   accept="image/*">
+
+                            <small class="text-muted">
+                                Upload clear answer photo. Note: selected photo will not remain after refresh.
+                            </small>
+
+                        {% endif %}
+
+                    </div>
+
+                    {% endfor %}
+
+                {% endif %}
 
                 <button type="submit"
                         class="btn btn-success px-5">

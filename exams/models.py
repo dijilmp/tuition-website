@@ -10,6 +10,7 @@ class Exam(models.Model):
         ('mcq', 'Multiple Choice'),
         ('one_line', 'One Line Answer'),
         ('photo_upload', 'Photo Upload Answer'),
+        ('question_paper_upload', 'Question Paper + Bulk Answer Upload'),
     ]
 
     title = models.CharField(max_length=200)
@@ -25,13 +26,20 @@ class Exam(models.Model):
     )
 
     exam_type = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=EXAM_TYPE_CHOICES
     )
 
     duration_minutes = models.PositiveIntegerField(default=30)
 
     total_marks = models.PositiveIntegerField(default=0)
+
+    question_paper_file = models.FileField(
+        upload_to='exam_question_papers/',
+        blank=True,
+        null=True,
+        help_text='Use only for Question Paper + Bulk Answer Upload exam. Upload PDF or image.'
+    )
 
     allowed_students = models.ManyToManyField(
         User,
@@ -58,6 +66,28 @@ class Exam(models.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def question_paper_is_pdf(self):
+        if not self.question_paper_file:
+            return False
+
+        return self.question_paper_file.name.lower().endswith('.pdf')
+
+    @property
+    def question_paper_is_image(self):
+        if not self.question_paper_file:
+            return False
+
+        lower_name = self.question_paper_file.name.lower()
+
+        return lower_name.endswith((
+            '.jpg',
+            '.jpeg',
+            '.png',
+            '.webp',
+            '.gif'
+        ))
 
 
 class Question(models.Model):
@@ -128,6 +158,13 @@ class ExamResult(models.Model):
 
     manual_feedback = models.TextField(blank=True, null=True)
 
+    submitted_answer_pdf = models.FileField(
+        upload_to='exam_submitted_answer_pdfs/',
+        blank=True,
+        null=True,
+        help_text='Auto-generated PDF created from the student uploaded answer images.'
+    )
+
     class Meta:
         unique_together = ('student', 'exam')
 
@@ -167,3 +204,28 @@ class StudentAnswer(models.Model):
 
     def __str__(self):
         return f"{self.result.student.username} - {self.question.question_text[:30]}"
+
+
+class BulkAnswerImage(models.Model):
+
+    result = models.ForeignKey(
+        ExamResult,
+        on_delete=models.CASCADE,
+        related_name='bulk_answer_images'
+    )
+
+    answer_image = models.FileField(
+        upload_to='exam_bulk_answer_images/'
+    )
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    order = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = 'Bulk Answer Image'
+        verbose_name_plural = 'Bulk Answer Images'
+
+    def __str__(self):
+        return f"{self.result.student.username} - {self.result.exam.title} - Page {self.order}"
