@@ -172,7 +172,7 @@
                         data-bs-toggle="collapse"
                         data-bs-target="#correctedPdfBox">
 
-                    View Teacher Corrected PDF
+                    View Teacher Corrected Answer Sheet
 
                 </button>
 
@@ -214,7 +214,7 @@
             <div class="card-body">
 
                 <h2 class="fw-bold mb-4 text-center">
-                    Teacher Corrected Answer PDF
+                    Teacher Corrected Answer Sheet
                 </h2>
 
                 <div class="ratio ratio-4x3"
@@ -222,7 +222,7 @@
 
                     <iframe src="{{ result.teacher_corrected_pdf.url }}#toolbar=0&navpanes=0&scrollbar=1"
                             style="width:100%; min-height:75vh; border:1px solid #ddd; border-radius:12px;"
-                            title="Teacher Corrected PDF">
+                            title="Teacher Corrected Answer Sheet">
                     </iframe>
 
                 </div>
@@ -384,6 +384,8 @@
         const viewAnswersBtn = document.getElementById("viewAnswersBtn");
         const answerPdfBox = document.getElementById("answerPdfBox");
         const viewAnswerPdfBtn = document.getElementById("viewAnswerPdfBtn");
+        const correctedPdfBox = document.getElementById("correctedPdfBox");
+        const viewCorrectedPdfBtn = document.getElementById("viewCorrectedPdfBtn");
         const topResultCard = document.getElementById("topResultCard");
 
         function setupToggle(box, button, openText, closeText) {
@@ -400,10 +402,13 @@
 
                 button.innerText = closeText;
 
-                box.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start"
-                });
+                setTimeout(function () {
+                    const y = box.getBoundingClientRect().top + window.pageYOffset - 15;
+                    window.scrollTo({
+                        top: y,
+                        behavior: "smooth"
+                    });
+                }, 250);
 
             });
 
@@ -428,6 +433,12 @@
 
         setupToggle(answerReview, viewAnswersBtn, "View Answers", "Hide Answers");
         setupToggle(answerPdfBox, viewAnswerPdfBtn, "View Answer PDF", "Hide Answer PDF");
+        setupToggle(
+            correctedPdfBox,
+            viewCorrectedPdfBtn,
+            "View Teacher Corrected Answer Sheet",
+            "Hide Teacher Corrected Answer Sheet"
+        );
 
     });
 
