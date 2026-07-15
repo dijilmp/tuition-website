@@ -165,6 +165,13 @@ class ExamResult(models.Model):
         help_text='Auto-generated PDF created from the student uploaded answer images.'
     )
 
+    teacher_corrected_pdf = models.FileField(
+        upload_to='exam_teacher_corrected_pdfs/',
+        blank=True,
+        null=True,
+        help_text='Upload the teacher-valued/corrected PDF after marking the student answer PDF.'
+    )
+
     class Meta:
         unique_together = ('student', 'exam')
 

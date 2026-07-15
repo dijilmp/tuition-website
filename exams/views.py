@@ -1,5 +1,6 @@
 from datetime import timedelta
 from io import BytesIO
+import re
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
@@ -9,6 +10,11 @@ from django.core.files.base import ContentFile
 from django.contrib import messages
 
 from PIL import Image, ImageOps
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 from accounts.models import StudentProfile
 from .models import (
@@ -63,14 +69,62 @@ def get_remaining_seconds(result):
 
 
 
+def get_student_display_name(user):
+    full_name = f"{user.first_name} {user.last_name}".strip()
+
+    if full_name:
+        return full_name
+
+    return user.username
+
+
+def make_safe_filename_part(value):
+    value = str(value).strip()
+    value = re.sub(r'[^A-Za-z0-9_-]+', '_', value)
+    value = value.strip('_')
+
+    if not value:
+        return 'file'
+
+    return value[:70]
+
+
+def get_answer_pdf_filename(result, suffix='answer_sheet.pdf'):
+    student_name = make_safe_filename_part(
+        get_student_display_name(result.student)
+    )
+
+    class_name = make_safe_filename_part(result.exam.class_level)
+    exam_name = make_safe_filename_part(result.exam.title)
+
+    return f"{student_name}_{class_name}_{exam_name}_{suffix}"
+
+
 def create_submitted_answer_pdf(result, uploaded_images):
     """
-    Converts uploaded answer images into a single PDF in the same order
-    selected/uploaded by the student. Only the generated PDF is used for admin valuation.
-    """
-    pdf_images = []
+    Converts uploaded answer images into a single PDF in the same order selected/uploaded
+    by the student.
 
-    for uploaded_image in uploaded_images:
+    Only the first PDF page gets a small one-line header:
+    Master X's Academy | Name: ... | Class: ... | Exam: ... | Page: 1
+
+    Other pages use almost full page space for answer images.
+    """
+
+    page_width, page_height = A4
+    margin = 0.8 * cm
+    first_page_header_height = 0.8 * cm
+
+    pdf_buffer = BytesIO()
+    pdf = canvas.Canvas(pdf_buffer, pagesize=A4)
+
+    student_name = get_student_display_name(result.student)
+    class_name = str(result.exam.class_level)
+    exam_title = result.exam.title
+
+    created_pages = 0
+
+    for page_number, uploaded_image in enumerate(uploaded_images, start=1):
         try:
             uploaded_image.seek(0)
             image = Image.open(uploaded_image)
@@ -78,37 +132,89 @@ def create_submitted_answer_pdf(result, uploaded_images):
 
             if image.mode in ("RGBA", "LA", "P"):
                 background = Image.new("RGB", image.size, "white")
+
                 if image.mode == "P":
                     image = image.convert("RGBA")
-                background.paste(image, mask=image.split()[-1] if image.mode in ("RGBA", "LA") else None)
+
+                background.paste(
+                    image,
+                    mask=image.split()[-1] if image.mode in ("RGBA", "LA") else None
+                )
+
                 image = background
             else:
                 image = image.convert("RGB")
 
-            pdf_images.append(image)
+            image_reader = ImageReader(image)
+            image_width, image_height = image.size
+
+            available_width = page_width - (2 * margin)
+
+            if page_number == 1:
+                available_height = page_height - (2 * margin) - first_page_header_height
+            else:
+                available_height = page_height - (2 * margin)
+
+            scale = min(
+                available_width / image_width,
+                available_height / image_height
+            )
+
+            draw_width = image_width * scale
+            draw_height = image_height * scale
+            image_x = (page_width - draw_width) / 2
+
+            if page_number == 1:
+                image_y = margin
+            else:
+                image_y = (page_height - draw_height) / 2
+
+            if page_number == 1:
+                header_text = (
+                    f"Master X's Academy | Name: {student_name} | "
+                    f"Class: {class_name} | Exam: {exam_title} | Page: 1"
+                )
+
+                pdf.setFont("Helvetica-Bold", 8)
+                pdf.drawString(
+                    margin,
+                    page_height - 0.45 * cm,
+                    header_text[:145]
+                )
+
+                pdf.line(
+                    margin,
+                    page_height - 0.62 * cm,
+                    page_width - margin,
+                    page_height - 0.62 * cm
+                )
+
+            pdf.drawImage(
+                image_reader,
+                image_x,
+                image_y,
+                width=draw_width,
+                height=draw_height,
+                preserveAspectRatio=True,
+                mask='auto'
+            )
+
+            pdf.showPage()
+            created_pages += 1
+
         except Exception:
             continue
 
-    if not pdf_images:
+    if created_pages == 0:
         return False
 
-    pdf_buffer = BytesIO()
-    first_image = pdf_images[0]
-    remaining_images = pdf_images[1:]
-
-    first_image.save(
-        pdf_buffer,
-        format="PDF",
-        save_all=True,
-        append_images=remaining_images,
-        resolution=100.0
-    )
-
+    pdf.save()
     pdf_buffer.seek(0)
 
-    safe_student = result.student.username.replace(" ", "_")
-    safe_exam = result.exam.title.replace(" ", "_")[:60]
-    filename = f"{safe_student}_{safe_exam}_answer_sheet.pdf"
+    filename = get_answer_pdf_filename(
+        result,
+        suffix='answer_sheet.pdf'
+    )
 
     result.submitted_answer_pdf.save(
         filename,

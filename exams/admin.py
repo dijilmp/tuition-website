@@ -397,6 +397,7 @@ class ExamResultAdmin(admin.ModelAdmin):
         'is_submitted',
         'is_evaluated',
         'submitted_answer_pdf_available',
+        'teacher_corrected_pdf_available',
         'started_at',
         'submitted_at',
     )
@@ -422,6 +423,8 @@ class ExamResultAdmin(admin.ModelAdmin):
         'submitted_at',
         'is_submitted',
         'submitted_answer_pdf_link',
+        'teacher_corrected_pdf',
+        'teacher_corrected_pdf_link',
         'score',
         'is_evaluated',
         'manual_feedback',
@@ -429,6 +432,7 @@ class ExamResultAdmin(admin.ModelAdmin):
 
     readonly_fields = (
         'submitted_answer_pdf_link',
+        'teacher_corrected_pdf_link',
     )
 
     inlines = [
@@ -446,7 +450,7 @@ class ExamResultAdmin(admin.ModelAdmin):
     def submitted_answer_pdf_link(self, obj):
         if obj.submitted_answer_pdf:
             return format_html(
-                '<iframe src="{}#toolbar=0&navpanes=0&scrollbar=1" style="width:100%; min-height:700px; border:1px solid #ddd; border-radius:8px;"></iframe><br><a href="{}" target="_blank">Open answer PDF in new tab</a>',
+                '<iframe src="{}#toolbar=0&navpanes=0&scrollbar=1" style="width:100%; min-height:700px; border:1px solid #ddd; border-radius:8px;"></iframe><br><a href="{}" target="_blank">Open / download answer PDF for valuation</a>',
                 obj.submitted_answer_pdf.url,
                 obj.submitted_answer_pdf.url
             )
@@ -454,6 +458,25 @@ class ExamResultAdmin(admin.ModelAdmin):
         return "Answer PDF not generated yet."
 
     submitted_answer_pdf_link.short_description = "Student Answer PDF"
+
+    def teacher_corrected_pdf_available(self, obj):
+        if obj.teacher_corrected_pdf:
+            return "Yes"
+
+        return "No"
+
+    teacher_corrected_pdf_available.short_description = "Corrected PDF"
+
+    def teacher_corrected_pdf_link(self, obj):
+        if obj.teacher_corrected_pdf:
+            return format_html(
+                '<a href="{}" target="_blank">Open teacher corrected PDF</a>',
+                obj.teacher_corrected_pdf.url
+            )
+
+        return "Teacher corrected PDF not uploaded yet."
+
+    teacher_corrected_pdf_link.short_description = "Teacher Corrected PDF Preview"
 
     actions = [
         'recalculate_score',

@@ -64,18 +64,6 @@
 
 <div class="container mt-5 mb-5">
 
-    {% if messages %}
-
-        {% for message in messages %}
-
-        <div class="alert alert-{{ message.tags }}">
-            {{ message }}
-        </div>
-
-        {% endfor %}
-
-    {% endif %}
-
     <div class="card shadow-sm border-0">
 
         <div class="card-body">
@@ -102,7 +90,7 @@
             {% if exam.exam_type == 'question_paper_upload' %}
 
             <div class="alert alert-info">
-                Question paper is shown inside this page. Write your answers on paper, then upload all answer images together before submitting. The system will automatically convert your uploaded images into one answer PDF in the same order.
+                Question paper is shown inside this page. Write your answers on paper, then upload all answer images together before submitting.
             </div>
 
             {% else %}
@@ -179,7 +167,7 @@
                         </h4>
 
                         <p class="text-muted">
-                            Upload clear photos of all answer pages in the correct order. After submit, these images will be converted into one PDF for valuation.
+                            Upload clear photos of all answer pages. More than one image is allowed.
                         </p>
 
                         <label class="form-label fw-bold">
@@ -188,10 +176,26 @@
 
                         <input type="file"
                                name="answer_images"
+                               id="answerImagesInput"
                                class="form-control mb-3"
                                accept="image/*"
                                multiple
                                required>
+
+                        <div id="answerImagesPreviewBox"
+                             class="mt-3 d-none">
+
+                            <div class="alert alert-warning py-2">
+                                Please verify the selected answer images below.
+                                The PDF will be generated in this same order.
+                                If the order is wrong, select the images again in the correct order.
+                            </div>
+
+                            <div id="answerImagesPreview"
+                                 class="row g-3">
+                            </div>
+
+                        </div>
 
                         <label class="form-label fw-bold">
                             Take photo using camera
@@ -199,9 +203,23 @@
 
                         <input type="file"
                                name="camera_images"
+                               id="cameraImagesInput"
                                class="form-control"
                                accept="image/*"
                                capture="environment">
+
+                        <div id="cameraImagesPreviewBox"
+                             class="mt-3 d-none">
+
+                            <div class="alert alert-info py-2">
+                                Camera photo preview:
+                            </div>
+
+                            <div id="cameraImagesPreview"
+                                 class="row g-3">
+                            </div>
+
+                        </div>
 
                         <small class="text-muted d-block mt-2">
                             On mobile, this option can open the camera. If you have many pages, you can use the first upload option and select multiple images.
@@ -396,7 +414,117 @@
 
     });
 
-    document.getElementById("examForm").addEventListener("submit", function() {
+    function renderImagePreview(inputElement, previewBoxId, previewContainerId, titlePrefix) {
+
+        const previewBox = document.getElementById(previewBoxId);
+        const previewContainer = document.getElementById(previewContainerId);
+
+        if (!inputElement || !previewBox || !previewContainer) {
+            return;
+        }
+
+        previewContainer.innerHTML = "";
+
+        const files = Array.from(inputElement.files || []);
+
+        if (files.length === 0) {
+            previewBox.classList.add("d-none");
+            return;
+        }
+
+        previewBox.classList.remove("d-none");
+
+        files.forEach(function(file, index) {
+
+            if (!file.type.startsWith("image/")) {
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+
+                const col = document.createElement("div");
+                col.className = "col-6 col-md-4 col-lg-3";
+
+                col.innerHTML =
+                    '<div class="card h-100 shadow-sm">' +
+                        '<div class="card-header fw-bold text-center">' +
+                            titlePrefix + ' ' + (index + 1) +
+                        '</div>' +
+                        '<img src="' + event.target.result + '" ' +
+                             'class="card-img-top" ' +
+                             'style="height:180px; object-fit:contain; background:#f8f9fa;">' +
+                        '<div class="card-body p-2">' +
+                            '<small class="text-muted d-block text-break">' +
+                                file.name +
+                            '</small>' +
+                        '</div>' +
+                    '</div>';
+
+                previewContainer.appendChild(col);
+
+            };
+
+            reader.readAsDataURL(file);
+
+        });
+
+    }
+
+    const answerImagesInput = document.getElementById("answerImagesInput");
+    const cameraImagesInput = document.getElementById("cameraImagesInput");
+
+    if (answerImagesInput) {
+
+        answerImagesInput.addEventListener("change", function() {
+
+            renderImagePreview(
+                answerImagesInput,
+                "answerImagesPreviewBox",
+                "answerImagesPreview",
+                "Page"
+            );
+
+        });
+
+    }
+
+    if (cameraImagesInput) {
+
+        cameraImagesInput.addEventListener("change", function() {
+
+            renderImagePreview(
+                cameraImagesInput,
+                "cameraImagesPreviewBox",
+                "cameraImagesPreview",
+                "Camera Photo"
+            );
+
+        });
+
+    }
+
+    document.getElementById("examForm").addEventListener("submit", function(event) {
+
+        const answerCount = answerImagesInput ? answerImagesInput.files.length : 0;
+        const cameraCount = cameraImagesInput ? cameraImagesInput.files.length : 0;
+
+        if ((answerImagesInput || cameraImagesInput) && (answerCount + cameraCount > 0)) {
+
+            const confirmSubmit = confirm(
+                "Please confirm: Did you check the selected answer images and order?\n\n" +
+                "Selected gallery/files images: " + answerCount + "\n" +
+                "Camera images: " + cameraCount + "\n\n" +
+                "Click OK to submit, or Cancel to verify again."
+            );
+
+            if (!confirmSubmit) {
+                event.preventDefault();
+                return;
+            }
+
+        }
 
         localStorage.removeItem(storageKey);
 

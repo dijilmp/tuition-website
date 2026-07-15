@@ -164,6 +164,20 @@
 
                 {% endif %}
 
+                {% if result.teacher_corrected_pdf and result.is_evaluated and exam.result_published %}
+
+                <button class="btn btn-info px-5 fw-bold me-2 mt-2"
+                        type="button"
+                        id="viewCorrectedPdfBtn"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#correctedPdfBox">
+
+                    View Teacher Corrected PDF
+
+                </button>
+
+                {% endif %}
+
                 {% if exam.allow_reattempt %}
 
                 <form method="post"
@@ -189,6 +203,41 @@
         </div>
 
     </div>
+
+    {% if result.teacher_corrected_pdf and result.is_evaluated and exam.result_published %}
+
+    <div class="collapse mt-5"
+         id="correctedPdfBox">
+
+        <div class="card shadow-sm border-0">
+
+            <div class="card-body">
+
+                <h2 class="fw-bold mb-4 text-center">
+                    Teacher Corrected Answer PDF
+                </h2>
+
+                <div class="ratio ratio-4x3"
+                     style="min-height: 75vh;">
+
+                    <iframe src="{{ result.teacher_corrected_pdf.url }}#toolbar=0&navpanes=0&scrollbar=1"
+                            style="width:100%; min-height:75vh; border:1px solid #ddd; border-radius:12px;"
+                            title="Teacher Corrected PDF">
+                    </iframe>
+
+                </div>
+
+                <p class="text-muted small mt-2 text-center">
+                    This is the answer sheet corrected by teacher.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% endif %}
 
     {% if exam.show_answer_pdf and exam.answer_pdf and result.is_submitted and exam.result_published %}
 
