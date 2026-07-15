@@ -105,15 +105,20 @@ def create_submitted_answer_pdf(result, uploaded_images):
     Converts uploaded answer images into a single PDF in the same order selected/uploaded
     by the student.
 
-    Only the first PDF page gets a small one-line header:
-    Master X's Academy | Name: ... | Class: ... | Exam: ... | Page: 1
-
-    Other pages use almost full page space for answer images.
+    Memory-safe version for Render 512 MB:
+    - resizes large mobile photos before putting them into PDF
+    - compresses images as JPEG
+    - keeps compact header only on the first page
     """
 
     page_width, page_height = A4
     margin = 0.8 * cm
     first_page_header_height = 0.8 * cm
+
+    # Keep this moderate for Render Starter memory.
+    # A4 at this resolution is enough for answer-sheet viewing/valuation.
+    max_image_dimension = 1600
+    jpeg_quality = 70
 
     pdf_buffer = BytesIO()
     pdf = canvas.Canvas(pdf_buffer, pagesize=A4)
@@ -125,27 +130,44 @@ def create_submitted_answer_pdf(result, uploaded_images):
     created_pages = 0
 
     for page_number, uploaded_image in enumerate(uploaded_images, start=1):
+        temp_image_buffer = None
+
         try:
             uploaded_image.seek(0)
             image = Image.open(uploaded_image)
             image = ImageOps.exif_transpose(image)
 
             if image.mode in ("RGBA", "LA", "P"):
-                background = Image.new("RGB", image.size, "white")
-
                 if image.mode == "P":
                     image = image.convert("RGBA")
 
+                background = Image.new("RGB", image.size, "white")
                 background.paste(
                     image,
                     mask=image.split()[-1] if image.mode in ("RGBA", "LA") else None
                 )
-
                 image = background
             else:
                 image = image.convert("RGB")
 
-            image_reader = ImageReader(image)
+            # Resize very large mobile photos before ReportLab processes them.
+            image.thumbnail(
+                (max_image_dimension, max_image_dimension),
+                Image.Resampling.LANCZOS
+            )
+
+            # Compress to JPEG first. This avoids ReportLab spending too much
+            # memory/time encoding huge original images.
+            temp_image_buffer = BytesIO()
+            image.save(
+                temp_image_buffer,
+                format="JPEG",
+                quality=jpeg_quality,
+                optimize=True
+            )
+            temp_image_buffer.seek(0)
+
+            image_reader = ImageReader(temp_image_buffer)
             image_width, image_height = image.size
 
             available_width = page_width - (2 * margin)
@@ -202,7 +224,16 @@ def create_submitted_answer_pdf(result, uploaded_images):
             pdf.showPage()
             created_pages += 1
 
+            # Release memory page by page
+            image.close()
+            temp_image_buffer.close()
+
         except Exception:
+            try:
+                if temp_image_buffer:
+                    temp_image_buffer.close()
+            except Exception:
+                pass
             continue
 
     if created_pages == 0:
@@ -221,6 +252,8 @@ def create_submitted_answer_pdf(result, uploaded_images):
         ContentFile(pdf_buffer.read()),
         save=False
     )
+
+    pdf_buffer.close()
 
     return True
 
