@@ -78,7 +78,7 @@ def get_student_display_name(user):
     return user.username
 
 
-def make_safe_filename_part(value):
+def make_safe_filename_part(value, max_chars=30):
     value = str(value).strip()
     value = re.sub(r'[^A-Za-z0-9_-]+', '_', value)
     value = value.strip('_')
@@ -86,18 +86,22 @@ def make_safe_filename_part(value):
     if not value:
         return 'file'
 
-    return value[:70]
+    return value[:max_chars]
 
 
 def get_answer_pdf_filename(result, suffix='answer_sheet.pdf'):
+    # Keep generated filename short enough for database/storage, but still readable.
+    # Full path also includes upload_to folder, so do not use very long exam names here.
     student_name = make_safe_filename_part(
-        get_student_display_name(result.student)
+        get_student_display_name(result.student),
+        max_chars=25
     )
 
-    class_name = make_safe_filename_part(result.exam.class_level)
-    exam_name = make_safe_filename_part(result.exam.title)
+    class_name = make_safe_filename_part(result.exam.class_level, max_chars=15)
+    exam_name = make_safe_filename_part(result.exam.title, max_chars=35)
+    result_id = result.id or 'new'
 
-    return f"{student_name}_{class_name}_{exam_name}_{suffix}"
+    return f"result_{result_id}_{student_name}_{class_name}_{exam_name}_{suffix}"
 
 
 def create_submitted_answer_pdf(result, uploaded_images):

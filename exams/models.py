@@ -38,6 +38,7 @@ class Exam(models.Model):
         upload_to='exam_question_papers/',
         blank=True,
         null=True,
+        max_length=255,
         help_text='Use only for Question Paper + Bulk Answer Upload exam. Upload PDF or image.'
     )
 
@@ -57,7 +58,8 @@ class Exam(models.Model):
     answer_pdf = models.FileField(
         upload_to='exam_answer_pdfs/',
         blank=True,
-        null=True
+        null=True,
+        max_length=255
     )
 
     show_answer_pdf = models.BooleanField(default=False)
@@ -103,7 +105,8 @@ class Question(models.Model):
     question_image = models.FileField(
         upload_to='exam_question_images/',
         blank=True,
-        null=True
+        null=True,
+        max_length=255
     )
 
     mark = models.PositiveIntegerField(default=1)
@@ -162,6 +165,7 @@ class ExamResult(models.Model):
         upload_to='exam_submitted_answer_pdfs/',
         blank=True,
         null=True,
+        max_length=255,
         help_text='Auto-generated PDF created from the student uploaded answer images.'
     )
 
@@ -169,6 +173,7 @@ class ExamResult(models.Model):
         upload_to='exam_teacher_corrected_pdfs/',
         blank=True,
         null=True,
+        max_length=255,
         help_text='Upload the teacher-valued/corrected PDF after marking the student answer PDF.'
     )
 
@@ -204,7 +209,8 @@ class StudentAnswer(models.Model):
     answer_photo = models.FileField(
         upload_to='exam_answers/',
         blank=True,
-        null=True
+        null=True,
+        max_length=255
     )
 
     marks_awarded = models.FloatField(default=0)
@@ -222,7 +228,8 @@ class BulkAnswerImage(models.Model):
     )
 
     answer_image = models.FileField(
-        upload_to='exam_bulk_answer_images/'
+        upload_to='exam_bulk_answer_images/',
+        max_length=255
     )
 
     uploaded_at = models.DateTimeField(auto_now_add=True)

@@ -64,6 +64,14 @@
 
 <div class="container mt-5 mb-5">
 
+    <div id="inAppBrowserWarning"
+         class="alert alert-danger d-none fw-bold">
+        File upload may not open inside WhatsApp / Instagram / Facebook browser.
+        Please tap the browser menu and choose <strong>Open in Chrome</strong> or
+        <strong>Open in Safari</strong>, then upload the answer images.
+    </div>
+
+
     <div class="card shadow-sm border-0">
 
         <div class="card-body">
@@ -174,11 +182,22 @@
                             Select answer images from phone/gallery/files
                         </label>
 
+                        <div class="alert alert-light border small mb-3">
+                            On mobile, please use Chrome/Safari. If the file picker does not open,
+                            refresh the page and tap the big blue button below.
+                        </div>
+
+                        <button type="button"
+                                class="btn btn-primary btn-lg w-100 fw-bold mb-2"
+                                id="openAnswerImagesBtn">
+                            📷 Select Answer Images
+                        </button>
+
                         <input type="file"
                                name="answer_images"
                                id="answerImagesInput"
                                class="form-control mb-3"
-                               accept="image/*"
+                               accept="image/jpeg,image/png,image/webp,image/*"
                                multiple
                                required>
 
@@ -201,12 +220,17 @@
                             Take photo using camera
                         </label>
 
+                        <button type="button"
+                                class="btn btn-outline-primary w-100 fw-bold mb-2"
+                                id="openCameraImagesBtn">
+                            📸 Open Camera / Take Photo
+                        </button>
+
                         <input type="file"
                                name="camera_images"
                                id="cameraImagesInput"
                                class="form-control"
-                               accept="image/*"
-                               capture="environment">
+                               accept="image/jpeg,image/png,image/webp,image/*">
 
                         <div id="cameraImagesPreviewBox"
                              class="mt-3 d-none">
@@ -474,6 +498,25 @@
 
     const answerImagesInput = document.getElementById("answerImagesInput");
     const cameraImagesInput = document.getElementById("cameraImagesInput");
+
+    const openAnswerImagesBtn = document.getElementById("openAnswerImagesBtn");
+    const openCameraImagesBtn = document.getElementById("openCameraImagesBtn");
+
+    if (openAnswerImagesBtn && answerImagesInput) {
+
+        openAnswerImagesBtn.addEventListener("click", function() {
+            answerImagesInput.click();
+        });
+
+    }
+
+    if (openCameraImagesBtn && cameraImagesInput) {
+
+        openCameraImagesBtn.addEventListener("click", function() {
+            cameraImagesInput.click();
+        });
+
+    }
 
     if (answerImagesInput) {
 
