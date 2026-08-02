@@ -71,6 +71,17 @@
         <strong>Open in Safari</strong>, then upload the answer images.
     </div>
 
+    {% if messages %}
+
+        {% for message in messages %}
+
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %} fw-bold">
+            {{ message }}
+        </div>
+
+        {% endfor %}
+
+    {% endif %}
 
     <div class="card shadow-sm border-0">
 
@@ -98,7 +109,7 @@
             {% if exam.exam_type == 'question_paper_upload' %}
 
             <div class="alert alert-info">
-                Question paper is shown inside this page. Write your answers on paper, then upload all answer images together before submitting.
+                Question paper is shown inside this page. Write your answers on paper, upload all answer images, generate the answer PDF, verify it, and then click <strong>Final Submit Answer</strong>.
             </div>
 
             {% else %}
@@ -111,6 +122,8 @@
 
             <hr>
 
+            {% if exam.exam_type == 'question_paper_upload' %}
+
             <form method="post"
                   enctype="multipart/form-data"
                   action="{% url 'submit_exam' exam.id %}"
@@ -118,214 +131,285 @@
 
                 {% csrf_token %}
 
-                {% if exam.exam_type == 'question_paper_upload' %}
+                <input type="hidden"
+                       name="answer_action"
+                       id="answerAction"
+                       value="generate_pdf">
 
-                    <div class="mb-4 p-3 border rounded bg-white">
+                <div class="mb-4 p-3 border rounded bg-white">
 
-                        <h4 class="fw-bold mb-3">
-                            Question Paper
-                        </h4>
+                    <h4 class="fw-bold mb-3">
+                        Question Paper
+                    </h4>
 
-                        {% if exam.question_paper_file %}
+                    {% if exam.question_paper_file %}
 
-                            {% if exam.question_paper_is_pdf %}
+                        {% if exam.question_paper_is_pdf %}
 
-                            <div class="ratio ratio-4x3"
-                                 style="min-height: 75vh;">
+                        <div class="ratio ratio-4x3"
+                             style="min-height: 75vh;">
 
-                                <iframe src="{{ exam.question_paper_file.url }}#toolbar=0&navpanes=0&scrollbar=1"
-                                        style="width:100%; min-height:75vh; border:1px solid #ddd; border-radius:12px;"
-                                        title="Question Paper">
-                                </iframe>
+                            <iframe src="{{ exam.question_paper_file.url }}#toolbar=0&navpanes=0&scrollbar=1"
+                                    style="width:100%; min-height:75vh; border:1px solid #ddd; border-radius:12px;"
+                                    title="Question Paper">
+                            </iframe>
 
-                            </div>
+                        </div>
 
-                            {% elif exam.question_paper_is_image %}
+                        {% elif exam.question_paper_is_image %}
 
-                            <div class="text-center">
+                        <div class="text-center">
 
-                                <img src="{{ exam.question_paper_file.url }}"
-                                     class="img-fluid rounded border"
-                                     style="max-height: 85vh;">
+                            <img src="{{ exam.question_paper_file.url }}"
+                                 class="img-fluid rounded border"
+                                 style="max-height: 85vh;">
 
-                            </div>
-
-                            {% else %}
-
-                            <div class="alert alert-warning">
-                                Question paper file is uploaded, but preview is available only for PDF or image files.
-                            </div>
-
-                            {% endif %}
+                        </div>
 
                         {% else %}
 
-                            <div class="alert alert-warning">
-                                Question paper is not uploaded yet. Please contact Master X's Academy.
-                            </div>
+                        <div class="alert alert-warning">
+                            Question paper file is uploaded, but preview is available only for PDF or image files.
+                        </div>
 
                         {% endif %}
 
+                    {% else %}
+
+                        <div class="alert alert-warning">
+                            Question paper is not uploaded yet. Please contact Master X's Academy.
+                        </div>
+
+                    {% endif %}
+
+                </div>
+
+                <div class="mb-4 p-3 border rounded bg-white">
+
+                    <h4 class="fw-bold mb-3">
+                        Upload Answer Images
+                    </h4>
+
+                    <p class="text-muted">
+                        Upload clear photos of all answer pages. More than one image is allowed.
+                    </p>
+
+                    <label class="form-label fw-bold">
+                        Select answer images from phone/gallery/files
+                    </label>
+
+                    <div class="alert alert-light border small mb-3">
+                        On mobile, please use Chrome/Safari. If the file picker does not open,
+                        refresh the page and tap the big blue button below.
                     </div>
 
-                    <div class="mb-4 p-3 border rounded bg-white">
+                    <button type="button"
+                            class="btn btn-primary btn-lg w-100 fw-bold mb-2"
+                            id="openAnswerImagesBtn">
+                        📷 Select Answer Images
+                    </button>
 
-                        <h4 class="fw-bold mb-3">
-                            Upload Answer Images
-                        </h4>
+                    <input type="file"
+                           name="answer_images"
+                           id="answerImagesInput"
+                           class="form-control mb-3"
+                           accept="image/jpeg,image/png,image/webp,image/*"
+                           multiple>
 
-                        <p class="text-muted">
-                            Upload clear photos of all answer pages. More than one image is allowed.
-                        </p>
+                    <div id="answerImagesPreviewBox"
+                         class="mt-3 d-none">
 
-                        <label class="form-label fw-bold">
-                            Select answer images from phone/gallery/files
-                        </label>
-
-                        <div class="alert alert-light border small mb-3">
-                            On mobile, please use Chrome/Safari. If the file picker does not open,
-                            refresh the page and tap the big blue button below.
+                        <div class="alert alert-warning py-2">
+                            Please verify the selected answer images below. The PDF will be generated in this same order.
+                            If the order is wrong, select the images again in the correct order.
                         </div>
 
-                        <button type="button"
-                                class="btn btn-primary btn-lg w-100 fw-bold mb-2"
-                                id="openAnswerImagesBtn">
-                            📷 Select Answer Images
-                        </button>
+                        <div id="answerImagesPreview"
+                             class="row g-3">
+                        </div>
 
-                        <input type="file"
-                               name="answer_images"
-                               id="answerImagesInput"
-                               class="form-control mb-3"
-                               accept="image/jpeg,image/png,image/webp,image/*"
-                               multiple
-                               required>
+                    </div>
 
-                        <div id="answerImagesPreviewBox"
-                             class="mt-3 d-none">
+                    <label class="form-label fw-bold mt-3">
+                        Take photo using camera
+                    </label>
 
-                            <div class="alert alert-warning py-2">
-                                Please verify the selected answer images below.
-                                The PDF will be generated in this same order.
-                                If the order is wrong, select the images again in the correct order.
-                            </div>
+                    <button type="button"
+                            class="btn btn-outline-primary w-100 fw-bold mb-2"
+                            id="openCameraImagesBtn">
+                        📸 Open Camera / Take Photo
+                    </button>
 
-                            <div id="answerImagesPreview"
-                                 class="row g-3">
-                            </div>
+                    <input type="file"
+                           name="camera_images"
+                           id="cameraImagesInput"
+                           class="form-control"
+                           accept="image/jpeg,image/png,image/webp,image/*">
+
+                    <div id="cameraImagesPreviewBox"
+                         class="mt-3 d-none">
+
+                        <div class="alert alert-info py-2">
+                            Camera photo preview:
+                        </div>
+
+                        <div id="cameraImagesPreview"
+                             class="row g-3">
+                        </div>
+
+                    </div>
+
+                    <small class="text-muted d-block mt-2">
+                        On mobile, this option can open the camera. If you have many pages, use the first upload option and select multiple images.
+                    </small>
+
+                    <div class="alert alert-primary mt-4 mb-3">
+                        Step 1: Select photos and verify the preview.<br>
+                        Step 2: Click <strong>Generate Answer PDF</strong>.<br>
+                        Step 3: Check the generated PDF below.<br>
+                        Step 4: Click <strong>Final Submit Answer</strong>.
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-success btn-lg px-5 fw-bold"
+                            id="generatePdfBtn">
+                        Generate Answer PDF
+                    </button>
+
+                    <div id="pdfGeneratingBox"
+                         class="alert alert-warning mt-3 d-none fw-bold">
+                        Please wait, generating your answer PDF. Do not close, refresh, or press back.
+                    </div>
+
+                </div>
+
+            </form>
+
+            {% if result.submitted_answer_pdf %}
+
+            <div class="mb-4 p-3 border rounded bg-white"
+                 id="generatedPdfBox">
+
+                <h4 class="fw-bold mb-3 text-success">
+                    Generated Answer PDF Preview
+                </h4>
+
+                <div class="alert alert-success">
+                    Please check whether all answer pages are visible in the PDF. If any page is missing or order is wrong, select photos again and click <strong>Generate Answer PDF</strong>.
+                </div>
+
+                <div class="ratio ratio-4x3"
+                     style="min-height: 75vh;">
+
+                    <iframe src="{{ result.submitted_answer_pdf.url }}#toolbar=0&navpanes=0&scrollbar=1"
+                            style="width:100%; min-height:75vh; border:1px solid #ddd; border-radius:12px;"
+                            title="Generated Answer PDF">
+                    </iframe>
+
+                </div>
+
+                <form method="post"
+                      action="{% url 'submit_exam' exam.id %}"
+                      id="finalSubmitForm"
+                      class="mt-4">
+
+                    {% csrf_token %}
+
+                    <input type="hidden"
+                           name="answer_action"
+                           value="final_submit">
+
+                    <button type="submit"
+                            class="btn btn-danger btn-lg px-5 fw-bold">
+                        Final Submit Answer
+                    </button>
+
+                </form>
+
+            </div>
+
+            {% endif %}
+
+            {% else %}
+
+            <form method="post"
+                  enctype="multipart/form-data"
+                  action="{% url 'submit_exam' exam.id %}"
+                  id="examForm">
+
+                {% csrf_token %}
+
+                {% for question in questions %}
+
+                <div class="mb-4 p-3 border rounded bg-white">
+
+                    <h5 class="fw-bold">
+                        Q{{ forloop.counter }}.
+                        {{ question.question_text }}
+                    </h5>
+
+                    <p class="text-muted">
+                        Marks: {{ question.mark }}
+                    </p>
+
+                    {% if question.question_image %}
+
+                    <div class="text-center mb-3">
+
+                        <img src="{{ question.question_image.url }}"
+                             class="img-fluid rounded border"
+                             style="max-height: 350px;">
+
+                    </div>
+
+                    {% endif %}
+
+                    {% if exam.exam_type == 'mcq' %}
+
+                        {% for choice in question.choices.all %}
+
+                        <div class="form-check mb-2">
+
+                            <input class="form-check-input exam-input"
+                                   type="radio"
+                                   name="question_{{ question.id }}"
+                                   value="{{ choice.id }}"
+                                   id="choice_{{ choice.id }}">
+
+                            <label class="form-check-label"
+                                   for="choice_{{ choice.id }}">
+
+                                {{ choice.choice_text }}
+
+                            </label>
 
                         </div>
 
-                        <label class="form-label fw-bold">
-                            Take photo using camera
-                        </label>
+                        {% endfor %}
 
-                        <button type="button"
-                                class="btn btn-outline-primary w-100 fw-bold mb-2"
-                                id="openCameraImagesBtn">
-                            📸 Open Camera / Take Photo
-                        </button>
+                    {% elif exam.exam_type == 'one_line' %}
+
+                        <textarea class="form-control exam-input"
+                                  name="question_{{ question.id }}"
+                                  rows="3"
+                                  placeholder="Write your answer here"></textarea>
+
+                    {% elif exam.exam_type == 'photo_upload' %}
 
                         <input type="file"
-                               name="camera_images"
-                               id="cameraImagesInput"
+                               name="question_{{ question.id }}"
                                class="form-control"
-                               accept="image/jpeg,image/png,image/webp,image/*">
+                               accept="image/*">
 
-                        <div id="cameraImagesPreviewBox"
-                             class="mt-3 d-none">
-
-                            <div class="alert alert-info py-2">
-                                Camera photo preview:
-                            </div>
-
-                            <div id="cameraImagesPreview"
-                                 class="row g-3">
-                            </div>
-
-                        </div>
-
-                        <small class="text-muted d-block mt-2">
-                            On mobile, this option can open the camera. If you have many pages, you can use the first upload option and select multiple images.
+                        <small class="text-muted">
+                            Upload clear answer photo. Note: selected photo will not remain after refresh.
                         </small>
 
-                    </div>
+                    {% endif %}
 
-                {% else %}
+                </div>
 
-                    {% for question in questions %}
-
-                    <div class="mb-4 p-3 border rounded bg-white">
-
-                        <h5 class="fw-bold">
-                            Q{{ forloop.counter }}.
-                            {{ question.question_text }}
-                        </h5>
-
-                        <p class="text-muted">
-                            Marks: {{ question.mark }}
-                        </p>
-
-                        {% if question.question_image %}
-
-                        <div class="text-center mb-3">
-
-                            <img src="{{ question.question_image.url }}"
-                                 class="img-fluid rounded border"
-                                 style="max-height: 350px;">
-
-                        </div>
-
-                        {% endif %}
-
-                        {% if exam.exam_type == 'mcq' %}
-
-                            {% for choice in question.choices.all %}
-
-                            <div class="form-check mb-2">
-
-                                <input class="form-check-input exam-input"
-                                       type="radio"
-                                       name="question_{{ question.id }}"
-                                       value="{{ choice.id }}"
-                                       id="choice_{{ choice.id }}">
-
-                                <label class="form-check-label"
-                                       for="choice_{{ choice.id }}">
-
-                                    {{ choice.choice_text }}
-
-                                </label>
-
-                            </div>
-
-                            {% endfor %}
-
-                        {% elif exam.exam_type == 'one_line' %}
-
-                            <textarea class="form-control exam-input"
-                                      name="question_{{ question.id }}"
-                                      rows="3"
-                                      placeholder="Write your answer here"></textarea>
-
-                        {% elif exam.exam_type == 'photo_upload' %}
-
-                            <input type="file"
-                                   name="question_{{ question.id }}"
-                                   class="form-control"
-                                   accept="image/*">
-
-                            <small class="text-muted">
-                                Upload clear answer photo. Note: selected photo will not remain after refresh.
-                            </small>
-
-                        {% endif %}
-
-                    </div>
-
-                    {% endfor %}
-
-                {% endif %}
+                {% endfor %}
 
                 <button type="submit"
                         class="btn btn-success px-5">
@@ -335,6 +419,8 @@
                 </button>
 
             </form>
+
+            {% endif %}
 
         </div>
 
@@ -357,7 +443,15 @@
         if (totalSeconds <= 0) {
             clearInterval(timerInterval);
             alert("Time is over. Your exam will be submitted.");
-            document.getElementById("examForm").submit();
+
+            const finalSubmitForm = document.getElementById("finalSubmitForm");
+            const examForm = document.getElementById("examForm");
+
+            if (finalSubmitForm) {
+                finalSubmitForm.submit();
+            } else if (examForm) {
+                examForm.submit();
+            }
         }
 
         totalSeconds--;
@@ -501,6 +595,8 @@
 
     const openAnswerImagesBtn = document.getElementById("openAnswerImagesBtn");
     const openCameraImagesBtn = document.getElementById("openCameraImagesBtn");
+    const generatePdfBtn = document.getElementById("generatePdfBtn");
+    const pdfGeneratingBox = document.getElementById("pdfGeneratingBox");
 
     if (openAnswerImagesBtn && answerImagesInput) {
 
@@ -548,30 +644,104 @@
 
     }
 
-    document.getElementById("examForm").addEventListener("submit", function(event) {
+    const examForm = document.getElementById("examForm");
 
-        const answerCount = answerImagesInput ? answerImagesInput.files.length : 0;
-        const cameraCount = cameraImagesInput ? cameraImagesInput.files.length : 0;
+    if (examForm) {
 
-        if ((answerImagesInput || cameraImagesInput) && (answerCount + cameraCount > 0)) {
+        examForm.addEventListener("submit", function(event) {
 
-            const confirmSubmit = confirm(
-                "Please confirm: Did you check the selected answer images and order?\n\n" +
-                "Selected gallery/files images: " + answerCount + "\n" +
-                "Camera images: " + cameraCount + "\n\n" +
-                "Click OK to submit, or Cancel to verify again."
-            );
+            const answerCount = answerImagesInput ? answerImagesInput.files.length : 0;
+            const cameraCount = cameraImagesInput ? cameraImagesInput.files.length : 0;
+            const totalImageCount = answerCount + cameraCount;
 
-            if (!confirmSubmit) {
+            {% if exam.exam_type == 'question_paper_upload' %}
+
+            if (totalImageCount === 0) {
+                alert("Please select answer images first.");
                 event.preventDefault();
                 return;
             }
 
-        }
+            const confirmGenerate = confirm(
+                "Please confirm the selected answer image order.\n\n" +
+                "Gallery/files images: " + answerCount + "\n" +
+                "Camera images: " + cameraCount + "\n\n" +
+                "Click OK to generate the answer PDF, or Cancel to check again."
+            );
 
-        localStorage.removeItem(storageKey);
+            if (!confirmGenerate) {
+                event.preventDefault();
+                return;
+            }
 
-    });
+            if (generatePdfBtn) {
+                generatePdfBtn.disabled = true;
+                generatePdfBtn.innerText = "Generating PDF... Please wait";
+            }
+
+            if (pdfGeneratingBox) {
+                pdfGeneratingBox.classList.remove("d-none");
+                pdfGeneratingBox.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                });
+            }
+
+            {% else %}
+
+            localStorage.removeItem(storageKey);
+
+            {% endif %}
+
+        });
+
+    }
+
+    const finalSubmitForm = document.getElementById("finalSubmitForm");
+
+    if (finalSubmitForm) {
+
+        finalSubmitForm.addEventListener("submit", function(event) {
+
+            const confirmFinalSubmit = confirm(
+                "Please confirm: Did you verify that all pages are visible in the generated answer PDF?\n\n" +
+                "Click OK for final submission."
+            );
+
+            if (!confirmFinalSubmit) {
+                event.preventDefault();
+            }
+
+        });
+
+    }
+
+    const generatedPdfBox = document.getElementById("generatedPdfBox");
+
+    if (generatedPdfBox) {
+        setTimeout(function() {
+            generatedPdfBox.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+        }, 500);
+    }
+
+    const inAppBrowserWarning = document.getElementById("inAppBrowserWarning");
+    const userAgent = navigator.userAgent || "";
+    const lowerUserAgent = userAgent.toLowerCase();
+
+    const isInAppBrowser =
+        lowerUserAgent.includes("whatsapp") ||
+        lowerUserAgent.includes("instagram") ||
+        lowerUserAgent.includes("fbav") ||
+        lowerUserAgent.includes("fban") ||
+        lowerUserAgent.includes("line/") ||
+        lowerUserAgent.includes(" wv");
+
+    if (isInAppBrowser && inAppBrowserWarning) {
+        inAppBrowserWarning.classList.remove("d-none");
+    }
 
     restoreAnswers();
 

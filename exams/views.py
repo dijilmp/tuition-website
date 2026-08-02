@@ -109,18 +109,16 @@ def create_submitted_answer_pdf(result, uploaded_images):
     Converts uploaded answer images into a single PDF in the same order selected/uploaded
     by the student.
 
-    Memory-safe version for Render 512 MB:
-    - resizes large mobile photos before putting them into PDF
-    - compresses images as JPEG
-    - keeps compact header only on the first page
+    Important:
+    - No silent skipping. If student selects 6 images, PDF must get 6 pages.
+    - If any page fails, raise an error and show message to student.
+    - Memory-safe for Render Starter: resize/compress before ReportLab.
     """
 
     page_width, page_height = A4
     margin = 0.8 * cm
     first_page_header_height = 0.8 * cm
 
-    # Keep this moderate for Render Starter memory.
-    # A4 at this resolution is enough for answer-sheet viewing/valuation.
     max_image_dimension = 1600
     jpeg_quality = 70
 
@@ -131,10 +129,16 @@ def create_submitted_answer_pdf(result, uploaded_images):
     class_name = str(result.exam.class_level)
     exam_title = result.exam.title
 
+    uploaded_images = list(uploaded_images)
+
+    if not uploaded_images:
+        raise ValueError('No answer images selected.')
+
     created_pages = 0
 
     for page_number, uploaded_image in enumerate(uploaded_images, start=1):
         temp_image_buffer = None
+        image = None
 
         try:
             uploaded_image.seek(0)
@@ -154,14 +158,11 @@ def create_submitted_answer_pdf(result, uploaded_images):
             else:
                 image = image.convert("RGB")
 
-            # Resize very large mobile photos before ReportLab processes them.
             image.thumbnail(
                 (max_image_dimension, max_image_dimension),
                 Image.Resampling.LANCZOS
             )
 
-            # Compress to JPEG first. This avoids ReportLab spending too much
-            # memory/time encoding huge original images.
             temp_image_buffer = BytesIO()
             image.save(
                 temp_image_buffer,
@@ -228,20 +229,30 @@ def create_submitted_answer_pdf(result, uploaded_images):
             pdf.showPage()
             created_pages += 1
 
-            # Release memory page by page
-            image.close()
-            temp_image_buffer.close()
+        except Exception as exc:
+            raise ValueError(
+                f'Page {page_number} could not be added to PDF. '
+                'Please reselect this image or take the photo again.'
+            ) from exc
 
-        except Exception:
+        finally:
+            try:
+                if image:
+                    image.close()
+            except Exception:
+                pass
+
             try:
                 if temp_image_buffer:
                     temp_image_buffer.close()
             except Exception:
                 pass
-            continue
 
-    if created_pages == 0:
-        return False
+    if created_pages != len(uploaded_images):
+        raise ValueError(
+            f'Selected {len(uploaded_images)} images, but only {created_pages} pages were created. '
+            'Please select the images again.'
+        )
 
     pdf.save()
     pdf_buffer.seek(0)
@@ -259,7 +270,7 @@ def create_submitted_answer_pdf(result, uploaded_images):
 
     pdf_buffer.close()
 
-    return True
+    return created_pages
 
 
 def mark_exam_submitted(result):
@@ -353,7 +364,8 @@ def take_exam(request, exam_id):
     return render(request, 'take_exam.html', {
         'exam': exam,
         'questions': questions,
-        'remaining_seconds': remaining_seconds
+        'remaining_seconds': remaining_seconds,
+        'result': result
     })
 
 
@@ -403,6 +415,43 @@ def submit_exam(request, exam_id):
 
     if exam.exam_type == 'question_paper_upload':
 
+        answer_action = request.POST.get('answer_action', '')
+
+        if answer_action == 'final_submit':
+
+            if not result.submitted_answer_pdf:
+                messages.error(
+                    request,
+                    'Please generate and verify your answer PDF before final submission.'
+                )
+
+                return redirect(
+                    'take_exam',
+                    exam_id=exam.id
+                )
+
+            result.is_submitted = True
+            result.submitted_at = timezone.now()
+            result.is_evaluated = False
+            result.score = 0
+            result.save()
+
+            return redirect(
+                'exam_result',
+                result_id=result.id
+            )
+
+        if answer_action != 'generate_pdf':
+            messages.error(
+                request,
+                'Please select answer images and click Generate Answer PDF first.'
+            )
+
+            return redirect(
+                'take_exam',
+                exam_id=exam.id
+            )
+
         answer_images = request.FILES.getlist('answer_images')
         camera_images = request.FILES.getlist('camera_images')
 
@@ -411,7 +460,7 @@ def submit_exam(request, exam_id):
         if not all_images:
             messages.error(
                 request,
-                'Please upload at least one answer image before submitting.'
+                'Please select answer images before generating the PDF.'
             )
 
             return redirect(
@@ -419,20 +468,22 @@ def submit_exam(request, exam_id):
                 exam_id=exam.id
             )
 
-        # Remove old generated PDF if this result is being reused locally.
+        # Remove old generated PDF before making a new one.
+        # This avoids accidentally submitting an older PDF if a new generation fails.
         if result.submitted_answer_pdf:
             result.submitted_answer_pdf.delete(save=False)
             result.submitted_answer_pdf = None
+            result.save(update_fields=['submitted_answer_pdf'])
 
-        pdf_created = create_submitted_answer_pdf(
-            result,
-            all_images
-        )
-
-        if not pdf_created:
+        try:
+            created_pages = create_submitted_answer_pdf(
+                result,
+                all_images
+            )
+        except ValueError as exc:
             messages.error(
                 request,
-                'Unable to create answer PDF. Please upload clear JPG or PNG images.'
+                str(exc)
             )
 
             return redirect(
@@ -440,15 +491,20 @@ def submit_exam(request, exam_id):
                 exam_id=exam.id
             )
 
-        result.is_submitted = True
-        result.submitted_at = timezone.now()
+        result.is_submitted = False
+        result.submitted_at = None
         result.is_evaluated = False
         result.score = 0
         result.save()
 
+        messages.success(
+            request,
+            f'Answer PDF generated successfully with {created_pages} pages. Please verify the PDF below and click Final Submit Answer.'
+        )
+
         return redirect(
-            'exam_result',
-            result_id=result.id
+            'take_exam',
+            exam_id=exam.id
         )
 
     questions = Question.objects.filter(
