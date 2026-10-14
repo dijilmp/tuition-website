@@ -87,13 +87,15 @@
 
             {% if result.is_evaluated %}
 
-                {% if exam.exam_type == 'mcq' or exam.result_published %}
+                {% if marks_visible or rank_visible %}
 
+                    {% if marks_visible %}
                     <h1 class="fw-bold text-success mt-4">
                         Score: {{ result.score|floatformat:"-2" }} out of {{ exam.total_marks }}
                     </h1>
+                    {% endif %}
 
-                    {% if rank %}
+                    {% if rank_visible and rank %}
 
                     <h3 class="fw-bold text-primary mt-3">
                         Rank: {{ rank }}
@@ -112,7 +114,9 @@
                 {% else %}
 
                     <div class="alert alert-warning mt-4">
-                        Your answer is evaluated, but result is not published yet.
+                        Your examination has been submitted successfully.
+                        {% if keys_visible %}The answer key is available below. Marks and ranks will be published separately by Master X's Academy.
+                        {% else %}Results will be published by Master X's Academy.{% endif %}
                     </div>
 
                 {% endif %}
@@ -125,7 +129,7 @@
 
             {% endif %}
 
-            {% if result.manual_feedback %}
+            {% if result.manual_feedback and marks_visible %}
 
             <div class="alert alert-secondary mt-4">
                 <strong>Feedback:</strong>
@@ -136,7 +140,7 @@
 
             <div class="mt-4">
 
-                {% if exam.exam_type == 'mcq' and exam.show_answer_review and result.is_submitted %}
+                {% if keys_visible and result.is_submitted %}
 
                 <button class="btn btn-primary px-5 fw-bold me-2"
                         type="button"
@@ -150,7 +154,7 @@
 
                 {% endif %}
 
-                {% if exam.show_answer_pdf and exam.answer_pdf and result.is_submitted and exam.result_published %}
+                {% if exam.show_answer_pdf and exam.answer_pdf and result.is_submitted and exam.result_published and exam.exam_type != 'mcq' or exam.show_answer_pdf and exam.answer_pdf and keys_visible %}
 
                 <button class="btn btn-success px-5 fw-bold me-2 mt-2"
                         type="button"
@@ -239,7 +243,7 @@
 
     {% endif %}
 
-    {% if exam.show_answer_pdf and exam.answer_pdf and result.is_submitted and exam.result_published %}
+    {% if exam.show_answer_pdf and exam.answer_pdf and result.is_submitted and exam.result_published and exam.exam_type != 'mcq' or exam.show_answer_pdf and exam.answer_pdf and keys_visible %}
 
     <div class="collapse mt-5"
          id="answerPdfBox">
@@ -274,7 +278,7 @@
 
     {% endif %}
 
-    {% if exam.exam_type == 'mcq' and exam.show_answer_review and result.is_submitted %}
+    {% if keys_visible and result.is_submitted %}
 
     <div class="collapse mt-5"
          id="answerReview">
@@ -287,20 +291,20 @@
                     Answer Review
                 </h2>
 
-                {% for answer in answers %}
+                {% for answer in answer_reviews %}
 
                 <div class="mb-4 p-3 border rounded bg-white">
 
                     <h5 class="fw-bold">
                         Q{{ forloop.counter }}.
-                        {{ answer.question.question_text }}
+                        {{ answer.question_text }}
                     </h5>
 
-                    {% if answer.question.question_image %}
+                    {% if answer.question_image %}
 
                     <div class="text-center mb-3">
 
-                        <img src="{{ answer.question.question_image.url }}"
+                        <img src="{{ answer.question_image }}"
                              class="img-fluid rounded border"
                              style="max-height: 300px;">
 
@@ -308,11 +312,11 @@
 
                     {% endif %}
 
-                    {% if answer.selected_choice %}
+                    {% if answer.selected_text %}
 
                     <p>
                         <strong>Your Answer:</strong>
-                        {{ answer.selected_choice.choice_text }}
+                        {{ answer.selected_text }}
                     </p>
 
                     {% else %}
@@ -324,20 +328,13 @@
 
                     {% endif %}
 
-                    {% for choice in answer.question.choices.all %}
-
-                        {% if choice.is_correct %}
-
-                        <p class="text-success">
-                            <strong>Correct Answer:</strong>
-                            {{ choice.choice_text }}
-                        </p>
-
-                        {% endif %}
-
+                    {% for correct_text in answer.correct_texts %}
+                    <p class="text-success"><strong>Correct Answer:</strong> {{ correct_text }}</p>
                     {% endfor %}
 
-                    {% if answer.marks_awarded > 0 %}
+                    {% if not marks_visible %}
+                    {# Correct answers are visible, but per-question marks stay private. #}
+                    {% elif answer.marks_awarded > 0 %}
 
                     <div class="alert alert-success py-2 mb-0">
                         Correct

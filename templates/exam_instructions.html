@@ -1,0 +1,20 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instructions – {{ exam.title }}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="{% static 'css/mxa_common.css' %}" rel="stylesheet"></head>
+<body><main class="container py-5" style="max-width:850px">
+<div class="card shadow-sm"><div class="card-body p-4">
+<h2>Master X's Academy</h2><h3>{{ exam.title }}</h3>
+<p class="text-muted">Duration: {{ exam.duration_minutes }} minutes. Your exam timer has not started yet.</p>
+<h4>Instructions to candidates</h4>
+<div class="bg-light border rounded p-3 mb-4" style="white-space:pre-wrap">{{ exam.candidate_instructions|default:"Read all instructions before starting. The exam timer will continue after refresh or disconnection. Submit your answers before time expires." }}</div>
+<form method="post" action="{% url 'begin_exam' exam.id %}">{% csrf_token %}
+{% if exam.declaration_required %}
+<div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="accepted" name="accepted" value="yes" required>
+<label class="form-check-label" for="accepted">I have read and understood the instructions and agree to follow them.</label></div>
+{% endif %}
+<button type="submit" class="btn btn-primary btn-lg">Start Examination</button>
+<a class="btn btn-outline-secondary ms-2" href="{% url 'exam_list' %}">Back</a>
+</form></div></div></main></body></html>

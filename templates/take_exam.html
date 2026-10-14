@@ -106,6 +106,12 @@
                 {{ exam.total_marks }}
             </p>
 
+            {% if exam.exam_type == 'mcq' %}
+            <div id="mxaSaveStatus" class="alert alert-warning" role="status" aria-live="polite">
+                Loading saved answers...
+            </div>
+            {% endif %}
+
             {% if exam.exam_type == 'question_paper_upload' %}
 
             <div class="alert alert-info">
@@ -115,7 +121,11 @@
             {% else %}
 
             <div class="alert alert-info">
-                Your selected MCQ answers and typed answers are saved automatically in this browser.
+                {% if exam.exam_type == 'mcq' %}
+                Your selections are saved on this device and synchronized to MXA when connected. Confirm the save status before submitting. Offline answers must reach the server before the deadline.
+                {% else %}
+                Text answers can be saved on this browser. Files need to be uploaded online before the deadline.
+                {% endif %}
             </div>
 
             {% endif %}
@@ -356,7 +366,7 @@
 
                     <div class="text-center mb-3">
 
-                        <img src="{{ question.question_image.url }}"
+                        <img src="{% if exam.exam_type == 'mcq' %}{{ question.question_image }}{% else %}{{ question.question_image.url }}{% endif %}"
                              class="img-fluid rounded border"
                              style="max-height: 350px;">
 
@@ -366,7 +376,7 @@
 
                     {% if exam.exam_type == 'mcq' %}
 
-                        {% for choice in question.choices.all %}
+                        {% for choice in question.options %}
 
                         <div class="form-check mb-2">
 
@@ -430,42 +440,41 @@
 
 <script>
 
-    let totalSeconds = {{ remaining_seconds }};
-
+    // A server-created deadline survives page refreshes. Do not decrement a local counter.
+    const remainingAtPageLoadMs = Math.max(0, {{ deadline_ms }} - {{ server_now_ms }});
+    const monotonicStartMs = performance.now();
+    let timerExpired = false;
     function updateTimer() {
-
-        let minutes = Math.floor(totalSeconds / 60);
-        let seconds = totalSeconds % 60;
-
-        document.getElementById("timer").innerHTML =
-            minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
-
-        if (totalSeconds <= 0) {
+        const remainingMs = Math.max(0, remainingAtPageLoadMs - (performance.now() - monotonicStartMs));
+        const totalSeconds = Math.ceil(remainingMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        document.getElementById('timer').textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+        if (totalSeconds <= 0 && !timerExpired) {
+            timerExpired = true;
             clearInterval(timerInterval);
-            alert("Time is over. Your exam will be submitted.");
-
-            const finalSubmitForm = document.getElementById("finalSubmitForm");
-            const examForm = document.getElementById("examForm");
-
-            if (finalSubmitForm) {
-                finalSubmitForm.submit();
-            } else if (examForm) {
-                examForm.submit();
-            }
+            {% if exam.exam_type == 'mcq' %}
+            if (window.mxaTimeExpired) window.mxaTimeExpired();
+            else document.addEventListener('DOMContentLoaded', function() {
+                if (window.mxaTimeExpired) window.mxaTimeExpired();
+            }, {once:true});
+            {% else %}
+            const finalSubmitForm = document.getElementById('finalSubmitForm');
+            const examForm = document.getElementById('examForm');
+            if (finalSubmitForm) finalSubmitForm.submit();
+            else if (examForm) examForm.submit();
+            {% endif %}
         }
-
-        totalSeconds--;
     }
-
+    const timerInterval = setInterval(updateTimer, 1000);
     updateTimer();
-
-    let timerInterval = setInterval(updateTimer, 1000);
-
 
     const storageKey = "mxa_exam_{{ exam.id }}_user_{{ request.user.id }}";
 
     function saveAnswers() {
-
+        {% if exam.exam_type == 'mcq' %}
+        return; // handled by dedicated low-network MCQ synchronization script
+        {% endif %}
         let answers = {};
 
         document.querySelectorAll(".exam-input").forEach(function(input) {
@@ -492,7 +501,9 @@
     }
 
     function restoreAnswers() {
-
+        {% if exam.exam_type == 'mcq' %}
+        return;
+        {% endif %}
         let savedAnswers = localStorage.getItem(storageKey);
 
         if (!savedAnswers) {
@@ -689,7 +700,9 @@
 
             {% else %}
 
-            localStorage.removeItem(storageKey);
+            {% if exam.exam_type != 'mcq' %}
+            // Do not discard local answers until the server confirms submission.
+            {% endif %}
 
             {% endif %}
 
@@ -746,6 +759,11 @@
     restoreAnswers();
 
 </script>
+{% if exam.exam_type == 'mcq' %}
+{{ saved_answers|json_script:"mxa-server-answers" }}
+<script id="mxa-mcq-config" type="application/json">{"exam": {{ exam.id }}, "result": {{ result.id }}, "user": {{ request.user.id }}, "autosave": "{% url 'autosave_mcq' exam.id %}"}</script>
+<script src="{% static 'js/mxa_mcq.js' %}" defer></script>
+{% endif %}
 
 </body>
 

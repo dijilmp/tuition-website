@@ -14,7 +14,7 @@ from .models import (
     Question,
     Choice,
     ExamResult,
-    StudentAnswer
+    StudentAnswer, ExamQuestion
 )
 
 
@@ -23,21 +23,48 @@ class ChoiceInline(admin.TabularInline):
     extra = 4
 
 
+class QuestionExamInline(admin.TabularInline):
+    model = ExamQuestion
+    fk_name = 'question'
+    extra = 0
+    autocomplete_fields = ('exam',)
+    fields = ('exam', 'position', 'mark')
+    verbose_name = 'Add question to an examination'
+    verbose_name_plural = 'Use this question in examinations'
+
+
+class ExamQuestionInline(admin.TabularInline):
+    model = ExamQuestion
+    fk_name = 'exam'
+    extra = 0
+    autocomplete_fields = ('question',)
+    fields = ('question', 'position', 'mark')
+    verbose_name_plural = 'Questions selected from the shared question bank'
+
+
+class ExamQuestionAdmin(admin.ModelAdmin):
+    list_display = ('exam', 'question', 'position', 'mark')
+    list_filter = ('exam',)
+    search_fields = ('exam__title', 'question__question_text')
+    autocomplete_fields = ('exam', 'question')
+
+
 class QuestionAdmin(admin.ModelAdmin):
     list_display = (
         'question_text',
-        'exam',
-        'mark',
+        'class_level', 'subject', 'topic',
+        'difficulty',
         'image_preview',
     )
 
     search_fields = (
         'question_text',
-        'exam__title',
+        'class_level', 'subject', 'topic',
+        'exam_links__exam__title',
     )
 
     list_filter = (
-        'exam',
+        'class_level', 'subject', 'difficulty', 'topic',
     )
 
     readonly_fields = (
@@ -45,16 +72,14 @@ class QuestionAdmin(admin.ModelAdmin):
     )
 
     fields = (
-        'exam',
         'question_text',
+        'class_level', 'subject', 'topic', 'difficulty',
         'question_image',
         'image_preview',
         'mark',
     )
 
-    inlines = [
-        ChoiceInline
-    ]
+    inlines = [ChoiceInline, QuestionExamInline]
 
     def image_preview(self, obj):
         if obj.question_image:
@@ -86,8 +111,9 @@ class ExamAdmin(admin.ModelAdmin):
         'evaluated_count',
         'is_published',
         'result_published',
+        'publish_marks', 'publish_ranks', 'publish_answer_keys',
+        'instructions_enabled',
         'allow_reattempt',
-        'show_answer_review',
         'show_answer_pdf',
         'answer_pdf_available',
         'view_results_link',
@@ -101,7 +127,8 @@ class ExamAdmin(admin.ModelAdmin):
         'is_published',
         'result_published',
         'allow_reattempt',
-        'show_answer_review',
+        'publish_marks', 'publish_ranks', 'publish_answer_keys',
+        'instructions_enabled',
         'show_answer_pdf',
     )
 
@@ -131,12 +158,16 @@ class ExamAdmin(admin.ModelAdmin):
             )
         }),
         ('Publish Settings', {
+            'description': ('MCQ exams: control marks, ranks and answer keys separately. '
+                            'Other exam types still use the legacy Result Published setting.'),
             'fields': (
-                'is_published',
-                'result_published',
+                'is_published', 'result_published',
+                'publish_marks', 'publish_ranks', 'publish_answer_keys',
                 'allow_reattempt',
-                'show_answer_review',
             )
+        }),
+        ('Candidate Instructions / Declaration', {
+            'fields': ('instructions_enabled', 'candidate_instructions', 'declaration_required'),
         }),
         ('Answer PDF / Solution', {
             'fields': (
@@ -145,6 +176,8 @@ class ExamAdmin(admin.ModelAdmin):
             )
         }),
     )
+
+    inlines = [ExamQuestionInline]
 
     def get_urls(self):
         urls = super().get_urls()
@@ -570,6 +603,7 @@ class StudentAnswerAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Exam, ExamAdmin)
+admin.site.register(ExamQuestion, ExamQuestionAdmin)
 admin.site.register(Question, QuestionAdmin)
 admin.site.register(ExamResult, ExamResultAdmin)
 admin.site.register(StudentAnswer, StudentAnswerAdmin)

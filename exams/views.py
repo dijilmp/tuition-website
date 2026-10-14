@@ -1,4 +1,5 @@
 from datetime import timedelta
+import json
 from io import BytesIO
 import re
 
@@ -8,6 +9,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.core.files.base import ContentFile
 from django.contrib import messages
+from django.db import transaction
+from django.http import JsonResponse
 
 from PIL import Image, ImageOps
 
@@ -23,8 +26,10 @@ from .models import (
     Choice,
     ExamResult,
     StudentAnswer,
-    BulkAnswerImage
+    BulkAnswerImage, ExamQuestion
 )
+from .mcq_service import (ensure_snapshot, public_questions, save_batch_locked,
+    finalize_locked, finalize_expired, past_deadline, deadline)
 
 
 def student_has_exam_access(user, exam):
@@ -298,12 +303,16 @@ def exam_list(request):
     )
 
     exam_items = []
+    # Single query for the user's current attempts rather than one per exam.
+    result_by_exam = {r.exam_id: r for r in ExamResult.objects.filter(
+        student=request.user, exam__in=exams
+    ).select_related('exam')}
 
     for exam in exams:
-        result = ExamResult.objects.filter(
-            student=request.user,
-            exam=exam
-        ).first()
+        result = result_by_exam.get(exam.pk)
+        if result and result.started_at and not result.is_submitted and past_deadline(result):
+            if finalize_expired(result):
+                result.refresh_from_db()
 
         exam_items.append({
             'exam': exam,
@@ -317,56 +326,115 @@ def exam_list(request):
 
 @login_required
 def take_exam(request, exam_id):
-
-    exam = get_object_or_404(
-        Exam,
-        id=exam_id
-    )
-
+    exam = get_object_or_404(Exam, id=exam_id)
     if not student_has_exam_access(request.user, exam):
         return redirect('exam_list')
 
-    result, created = ExamResult.objects.get_or_create(
-        student=request.user,
-        exam=exam,
-        defaults={
-            'started_at': timezone.now(),
-            'score': 0,
-            'is_evaluated': False,
-            'is_submitted': False,
-        }
-    )
+    result = ExamResult.objects.filter(student=request.user, exam=exam).first()
+    if result and result.is_submitted:
+        return redirect('exam_result', result_id=result.id)
 
-    if result.started_at is None:
-        result.started_at = timezone.now()
-        result.save()
+    # Do not start the clock just for reading instructions.
+    if (not result or result.started_at is None) and exam.instructions_enabled:
+        return render(request, 'exam_instructions.html', {'exam': exam})
 
-    if result.is_submitted:
-        return redirect(
-            'exam_result',
-            result_id=result.id
-        )
+    # Preserve direct-start behavior for exams with instructions disabled.
+    if not result or result.started_at is None:
+        result = start_exam_attempt(request.user, exam, accepted=False)
 
-    remaining_seconds = get_remaining_seconds(result)
+    if get_remaining_seconds(result) <= 0:
+        finalize_expired(result)
+        return redirect('exam_result', result_id=result.id)
 
-    if remaining_seconds <= 0:
-        mark_exam_submitted(result)
-
-        return redirect(
-            'exam_result',
-            result_id=result.id
-        )
-
-    questions = Question.objects.filter(
-        exam=exam
-    )
+    if exam.exam_type == 'mcq':
+        with transaction.atomic():
+            locked = ExamResult.objects.select_for_update().select_related('exam').get(pk=result.pk)
+            if locked.is_submitted:
+                return redirect('exam_result', result_id=locked.id)
+            snapshot = ensure_snapshot(locked)
+        questions = public_questions(snapshot)
+        saved_answers = [{
+            'question_id': a.question_id,
+            'choice_id': a.selected_choice_id_snapshot,
+            'revision': a.client_revision,
+        } for a in StudentAnswer.objects.filter(result=result).exclude(
+            selected_choice_id_snapshot__isnull=True
+        )]
+    else:
+        questions = [link.question for link in ExamQuestion.objects.filter(
+            exam=exam).select_related('question').order_by('position', 'pk')]
+        saved_answers = []
 
     return render(request, 'take_exam.html', {
-        'exam': exam,
-        'questions': questions,
-        'remaining_seconds': remaining_seconds,
-        'result': result
+        'exam': exam, 'questions': questions,
+        'remaining_seconds': get_remaining_seconds(result), 'result': result,
+        'deadline_ms': int(deadline(result).timestamp() * 1000),
+        'server_now_ms': int(timezone.now().timestamp() * 1000),
+        'saved_answers': saved_answers,
     })
+
+
+def start_exam_attempt(student, exam, *, accepted):
+    with transaction.atomic():
+        result, created = ExamResult.objects.select_for_update().get_or_create(
+            student=student, exam=exam,
+            defaults={'started_at': timezone.now(), 'instructions_accepted_at':
+                      timezone.now() if accepted else None},
+        )
+        if result.started_at is None and not result.is_submitted:
+            result.started_at = timezone.now()
+            result.instructions_accepted_at = timezone.now() if accepted else None
+            result.save(update_fields=['started_at', 'instructions_accepted_at'])
+        if exam.exam_type == 'mcq' and not result.is_submitted:
+            ensure_snapshot(result)
+        return result
+
+
+@login_required
+@require_POST
+def begin_exam(request, exam_id):
+    exam = get_object_or_404(Exam, pk=exam_id)
+    if not student_has_exam_access(request.user, exam):
+        return redirect('exam_list')
+    if exam.instructions_enabled and exam.declaration_required and request.POST.get('accepted') != 'yes':
+        messages.error(request, 'Please accept the declaration before starting.')
+        return redirect('take_exam', exam_id=exam.id)
+    start_exam_attempt(request.user, exam, accepted=exam.instructions_enabled and request.POST.get('accepted') == 'yes')
+    return redirect('take_exam', exam_id=exam.id)
+
+
+@login_required
+@require_POST
+def autosave_mcq(request, exam_id):
+    exam = get_object_or_404(Exam, pk=exam_id, exam_type='mcq')
+    if not student_has_exam_access(request.user, exam):
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    if len(request.body) > 65536:
+        return JsonResponse({'error': 'Answer batch is too large'}, status=413)
+    try:
+        payload = json.loads(request.body)
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid request')
+        with transaction.atomic():
+            result = (ExamResult.objects.select_for_update().select_related('exam')
+                      .get(student=request.user, exam=exam))
+            if result.is_submitted:
+                return JsonResponse({'submitted': True}, status=409)
+            if not result.started_at:
+                return JsonResponse({'error': 'Attempt not started'}, status=409)
+            if past_deadline(result):
+                finalize_locked(result)
+                return JsonResponse({'submitted': True, 'error': 'Deadline passed'}, status=409)
+            batch = payload.get('answers', [])
+            saved = save_batch_locked(result, batch)
+            requested = {int(entry['question_id']) for entry in batch}
+            persisted = list(StudentAnswer.objects.filter(result=result, question_id__in=requested)
+                             .values('question_id', 'selected_choice_id_snapshot', 'client_revision'))
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+    except ExamResult.DoesNotExist:
+        return JsonResponse({'error': 'Attempt not found'}, status=404)
+    return JsonResponse({'saved': True, 'count': saved, 'confirmed': persisted})
 
 
 @login_required
@@ -388,6 +456,32 @@ def submit_exam(request, exam_id):
         student=request.user,
         exam=exam
     )
+
+    if exam.exam_type == 'mcq':
+        with transaction.atomic():
+            result = (ExamResult.objects.select_for_update().select_related('exam')
+                      .get(pk=result.pk))
+            if result.is_submitted:
+                return redirect('exam_result', result_id=result.id)
+            if not result.started_at:
+                return redirect('take_exam', exam_id=exam.id)
+            if past_deadline(result):
+                finalize_locked(result)
+                return redirect('exam_result', result_id=result.id)
+            # Full form POST is reliable fallback when a background save failed.
+            updates = []
+            for q in ensure_snapshot(result):
+                choice = request.POST.get(f"question_{q['id']}")
+                if choice:
+                    updates.append({'question_id': q['id'], 'choice_id': choice,
+                                    'revision': request.POST.get(f"revision_{q['id']}", 0)})
+            try:
+                save_batch_locked(result, updates)
+            except (ValueError, TypeError):
+                messages.error(request, 'Invalid response. Please retry submission.')
+                return redirect('take_exam', exam_id=exam.id)
+            finalize_locked(result)
+        return redirect('exam_result', result_id=result.id)
 
     if result.is_submitted:
         return redirect(
@@ -507,9 +601,8 @@ def submit_exam(request, exam_id):
             exam_id=exam.id
         )
 
-    questions = Question.objects.filter(
-        exam=exam
-    )
+    questions = [link.question for link in ExamQuestion.objects.filter(
+        exam=exam).select_related('question').order_by('position', 'pk')]
 
     for question in questions:
 
@@ -584,53 +677,60 @@ def submit_exam(request, exam_id):
 
 @login_required
 def exam_result(request, result_id):
-
-    result = get_object_or_404(
-        ExamResult,
-        id=result_id,
-        student=request.user
-    )
-
+    result = get_object_or_404(ExamResult.objects.select_related('exam'),
+                               id=result_id, student=request.user)
     exam = result.exam
+    if not result.is_submitted:
+        finalize_expired(result)
+        result.refresh_from_db()
+    if not result.is_submitted:
+        return redirect('take_exam', exam_id=exam.id)
 
+    is_mcq = exam.exam_type == 'mcq'
+    marks_visible = result.is_evaluated and (exam.publish_marks if is_mcq else exam.result_published)
+    rank_visible = result.is_evaluated and (exam.publish_ranks if is_mcq else exam.result_published)
+    keys_visible = is_mcq and exam.publish_answer_keys
     rank = None
-
-    if result.is_evaluated and exam.result_published:
-        higher_score_count = ExamResult.objects.filter(
-            exam=exam,
-            is_evaluated=True,
+    if rank_visible:
+        rank = ExamResult.objects.filter(
+            exam=exam, is_submitted=True, is_evaluated=True,
             score__gt=result.score
-        ).count()
-
-        rank = higher_score_count + 1
-
-    if result.is_evaluated and exam.exam_type == 'mcq':
-        higher_score_count = ExamResult.objects.filter(
-            exam=exam,
-            is_evaluated=True,
-            score__gt=result.score
-        ).count()
-
-        rank = higher_score_count + 1
-
-    attempted_count = ExamResult.objects.filter(
-        exam=exam,
-        is_submitted=True
-    ).count()
-
-    answers = StudentAnswer.objects.filter(
-        result=result
-    ).select_related(
-        'question',
-        'selected_choice'
-    )
+        ).count() + 1
+    attempted_count = ExamResult.objects.filter(exam=exam, is_submitted=True).count()
+    answers = []
+    answer_reviews = []
+    if keys_visible:
+        answers = list(StudentAnswer.objects.filter(result=result).select_related(
+            'question', 'selected_choice').prefetch_related('question__choices'))
+        by_question = {a.question_id: a for a in answers}
+        snapshot = result.question_snapshot or []
+        if snapshot:
+            for q in snapshot:
+                a = by_question.get(q['id'])
+                chosen = a.selected_choice_id_snapshot if a else None
+                answer_reviews.append({
+                    'question_text': q['question_text'],
+                    'question_image': q.get('question_image', ''),
+                    'selected_text': next((c['choice_text'] for c in q['choices']
+                                           if c['id'] == chosen), ''),
+                    'correct_texts': [c['choice_text'] for c in q['choices'] if c.get('correct')],
+                    'marks_awarded': a.marks_awarded if (a and exam.publish_marks) else None,
+                })
+        else:  # Attempts saved before this upgrade.
+            for a in answers:
+                answer_reviews.append({
+                    'question_text': a.question.question_text,
+                    'question_image': a.question.question_image.url if a.question.question_image else '',
+                    'selected_text': a.selected_choice.choice_text if a.selected_choice else '',
+                    'correct_texts': [c.choice_text for c in a.question.choices.all() if c.is_correct],
+                    'marks_awarded': a.marks_awarded if exam.publish_marks else None,
+                })
 
     return render(request, 'exam_result.html', {
-        'result': result,
-        'exam': exam,
-        'rank': rank,
-        'attempted_count': attempted_count,
-        'answers': answers,
+        'result': result, 'exam': exam, 'rank': rank,
+        'marks_visible': marks_visible, 'rank_visible': rank_visible,
+        'keys_visible': keys_visible, 'attempted_count': attempted_count,
+        'answers': answers, 'answer_reviews': answer_reviews,
     })
 
 

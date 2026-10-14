@@ -5,11 +5,13 @@ from .views import (
     take_exam,
     submit_exam,
     exam_result,
-    reattempt_exam
+    reattempt_exam, begin_exam, autosave_mcq
 )
 
 
 urlpatterns = [
+    path('<int:exam_id>/begin/', begin_exam, name='begin_exam'),
+    path('<int:exam_id>/autosave/', autosave_mcq, name='autosave_mcq'),
     path('', exam_list, name='exam_list'),
 
     path(

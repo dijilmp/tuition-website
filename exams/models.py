@@ -51,6 +51,19 @@ class Exam(models.Model):
 
     result_published = models.BooleanField(default=False)
 
+    # New MCQ exams default to private results. Existing exams are backfilled in 0010.
+    publish_marks = models.BooleanField(default=False)
+    publish_ranks = models.BooleanField(default=False)
+    publish_answer_keys = models.BooleanField(default=False)
+
+    instructions_enabled = models.BooleanField(default=False)
+    declaration_required = models.BooleanField(default=True)
+    candidate_instructions = models.TextField(blank=True, default='')
+
+    question_bank = models.ManyToManyField(
+        'Question', through='ExamQuestion', related_name='mapped_exams', blank=True
+    )
+
     allow_reattempt = models.BooleanField(default=False)
 
     show_answer_review = models.BooleanField(default=False)
@@ -94,10 +107,11 @@ class Exam(models.Model):
 
 class Question(models.Model):
 
+    # Legacy link retained for backwards compatibility with existing rows.
+    # New questions are independently created in the reusable bank.
     exam = models.ForeignKey(
-        Exam,
-        on_delete=models.CASCADE,
-        related_name='questions'
+        Exam, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='legacy_questions'
     )
 
     question_text = models.TextField()
@@ -110,9 +124,33 @@ class Question(models.Model):
     )
 
     mark = models.PositiveIntegerField(default=1)
+    class_level = models.ForeignKey(ClassLevel, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='bank_questions')
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='bank_questions')
+    topic = models.CharField(max_length=120, blank=True, default='')
+    difficulty = models.CharField(
+        max_length=10, default='medium',
+        choices=[('easy', 'Easy'), ('medium', 'Medium'), ('hard', 'Hard')],
+    )
 
     def __str__(self):
         return self.question_text[:50]
+
+
+class ExamQuestion(models.Model):
+    """Many-to-many link: reusable question + exam-specific mark/order."""
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='exam_questions')
+    question = models.ForeignKey('Question', on_delete=models.PROTECT, related_name='exam_links')
+    position = models.PositiveIntegerField(default=0)
+    mark = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['exam', 'question'], name='unique_exam_question')]
+        ordering = ('position', 'id')
+
+    def __str__(self):
+        return f'{self.exam.title}: {self.question}'
 
 
 class Choice(models.Model):
@@ -142,6 +180,10 @@ class ExamResult(models.Model):
         Exam,
         on_delete=models.CASCADE
     )
+
+    instructions_accepted_at = models.DateTimeField(null=True, blank=True)
+    # Per-attempt immutable MCQ definitions (including marking scheme), never sent in full to client.
+    question_snapshot = models.JSONField(default=list, blank=True)
 
     started_at = models.DateTimeField(
         null=True,
@@ -192,10 +234,15 @@ class StudentAnswer(models.Model):
         related_name='answers'
     )
 
+    # Keep attempted questions intact for historical result review.
     question = models.ForeignKey(
         Question,
-        on_delete=models.CASCADE
+        on_delete=models.PROTECT
     )
+
+    # IDs survive updates to the reusable bank's choices.
+    selected_choice_id_snapshot = models.BigIntegerField(null=True, blank=True)
+    client_revision = models.PositiveIntegerField(default=0)
 
     selected_choice = models.ForeignKey(
         Choice,
